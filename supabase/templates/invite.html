@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+  <body style="margin:0;background:#130d0a;font-family:Helvetica,Arial,sans-serif;color:#f5efe9">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:40px 16px">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#1f1612;border:1px solid #33261f;border-radius:20px;padding:36px">
+            <tr><td style="font-size:20px;font-weight:600;color:#F2711C">Foundry</td></tr>
+            <tr><td style="padding-top:24px;font-size:24px;font-weight:600">Welcome to Foundry</td></tr>
+            <tr>
+              <td style="padding-top:12px;font-size:15px;line-height:1.6;color:#c9bcb2">
+                You've been added to the Foundry Media team. Set your password to get started.
+              </td>
+            </tr>
+            <tr>
+              <td style="padding-top:28px">
+                <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite&next=/welcome"
+                   style="display:inline-block;background:#F2711C;color:#fff;text-decoration:none;font-weight:600;padding:14px 22px;border-radius:12px">
+                  Accept invite
+                </a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding-top:28px;font-size:12px;color:#8c7d72">
+                If you weren't expecting this, you can ignore this email.
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
