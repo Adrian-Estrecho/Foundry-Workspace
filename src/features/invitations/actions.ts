@@ -2,9 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { z } from "zod";
+import { welcomeAboardEmail } from "@/features/editors/emails";
 import { fail, fieldErrorsOf, type ActionResult } from "@/lib/action-result";
 import { requireAccount, requireAdmin } from "@/lib/auth";
+import { sendEmail } from "@/lib/email";
+import { env } from "@/lib/env";
+import { adminEmailContext, workspaceLink } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
 import { INVITATION_DAYS } from "./constants";
 import { sendInvitationEmail } from "./email";
@@ -238,9 +243,9 @@ const ACCEPT_ERRORS: Record<string, string> = {
   rate_limited: "Too many wrong codes. Wait 15 minutes and try again.",
 };
 
-/** Joins the workspace behind the code, then opens onboarding. */
+/** Joins the workspace behind the code, then opens onboarding with a welcome email. */
 export async function acceptInvitation(code: string): Promise<ActionResult> {
-  await requireAccount();
+  const account = await requireAccount();
   if (!codeSchema.safeParse(code).success) return fail("Enter the code from your invitation.");
 
   const supabase = await createClient();
@@ -253,6 +258,22 @@ export async function acceptInvitation(code: string): Promise<ActionResult> {
     redirect("/dashboard");
   }
   if (data.status !== "joined") return fail(ACCEPT_ERRORS[data.status] ?? "Couldn't accept the invitation.");
+
+  const workspaceId = data.workspace_id;
+  if (workspaceId) {
+    after(async () => {
+      const { recipients, ownerName, accent, companyName } = await adminEmailContext(workspaceId);
+      const email = welcomeAboardEmail({
+        companyName,
+        accent,
+        name: account.full_name,
+        ownerName,
+        onboardingUrl: workspaceLink(env.siteUrl, workspaceId, "/onboarding"),
+        timeZone: account.timezone,
+      });
+      await sendEmail({ to: account.email, replyTo: recipients[0], ...email });
+    });
+  }
 
   revalidatePath("/", "layout");
   redirect("/onboarding");

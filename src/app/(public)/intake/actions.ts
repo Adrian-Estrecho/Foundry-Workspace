@@ -3,7 +3,8 @@
 import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { sendEmail, renderEmail } from "@/lib/email";
+import { newLeadEmail } from "@/features/clients/emails";
+import { sendEmail } from "@/lib/email";
 import { env } from "@/lib/env";
 import { getBranding } from "@/lib/branding";
 import { checkFormToken } from "@/lib/form-token";
@@ -98,26 +99,13 @@ export async function submitIntake(_prev: IntakeState, formData: FormData): Prom
 
   after(async () => {
     const { recipients, accent, companyName } = await adminEmailContext(branding.workspaceId);
-    const name = lead.company ?? lead.name;
-    const email = renderEmail({
+    const email = newLeadEmail({
+      companyName,
       accent,
-      brand: companyName,
-      heading: `New lead: ${name}`,
-      intro: "A new project enquiry just came in through the intake form. It's waiting in New Lead.",
-      rows: [
-        ["Name", lead.name],
-        ["Company", lead.company],
-        ["Email", lead.email],
-        ["Phone", lead.phone],
-        ["Project type", lead.project_type],
-        ["Budget", lead.budget_range],
-        ["Deadline", lead.deadline],
-        ["References", lead.reference_links.join("\n")],
-        ["Notes", lead.notes],
-      ],
-      cta: { label: "Open in ReEdit", url: workspaceLink(env.siteUrl, branding.workspaceId, `/clients/${clientId}`) },
+      lead,
+      clientUrl: workspaceLink(env.siteUrl, branding.workspaceId, `/clients/${clientId}`),
     });
-    await sendEmail({ to: recipients, subject: `New lead: ${name}`, replyTo: lead.email, ...email });
+    await sendEmail({ to: recipients, replyTo: lead.email, ...email });
   });
 
   redirect(thanks);

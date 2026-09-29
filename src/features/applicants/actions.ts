@@ -4,12 +4,12 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { fail, type ActionResult } from "@/lib/action-result";
 import { requireAdmin } from "@/lib/auth";
-import { renderEmail, sendEmail } from "@/lib/email";
+import { sendEmail } from "@/lib/email";
 import { adminEmailContext } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
-import { firstName } from "@/lib/utils";
 import { Constants } from "@/types/database";
 import { isDecisionStage, JOINED_MESSAGE } from "./constants";
+import { applicationDeclinedEmail } from "./emails";
 
 const stageSchema = z.enum(Constants.public.Enums.applicant_stage);
 
@@ -128,13 +128,8 @@ export async function rejectApplicant(id: string, notify: boolean, position?: nu
 
   if (notify) {
     const { recipients, accent, companyName } = await adminEmailContext(user.workspace.id);
-    const email = renderEmail({
-      accent,
-      brand: companyName,
-      heading: `Your application to ${companyName}`,
-      intro: `Thanks for applying, ${firstName(applicant.full_name)}, and for the time you put into it. We've reviewed your application and won't be moving forward right now. We'll keep your details on file and reach out if a better fit comes up.`,
-    });
-    await sendEmail({ to: applicant.email, subject: `Your application to ${companyName}`, replyTo: recipients[0], ...email });
+    const email = applicationDeclinedEmail({ companyName, accent, name: applicant.full_name });
+    await sendEmail({ to: applicant.email, replyTo: recipients[0], ...email });
   }
 
   revalidateApplicant(id);

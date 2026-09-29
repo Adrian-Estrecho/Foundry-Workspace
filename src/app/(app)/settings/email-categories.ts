@@ -1,13 +1,13 @@
 /**
  * Email settings, matching notification_email_category() in
- * 0014_notifications.sql (and the check on profiles.email_muted).
+ * 0015_reminders.sql (and the check on profiles.email_muted).
  */
 export const EMAIL_CATEGORIES = [
   {
     value: "tasks",
     label: "Tasks",
-    admin: "Work ready for review, overdue tasks and @mentions.",
-    editor: "New tasks, changes requested, due tomorrow, overdue and @mentions.",
+    admin: "Work ready for review, tasks due tomorrow that aren't in review, overdue work, tasks editors haven't started, and @mentions.",
+    editor: "New tasks, reminders to start them, due today or tomorrow, changes requested, approvals, overdue and @mentions.",
     roles: ["admin", "editor"],
   },
   {

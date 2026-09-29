@@ -4,11 +4,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { fail, fieldErrorsOf, optionalText, optionalUrl, type ActionResult } from "@/lib/action-result";
 import { requireAdmin, type CurrentUser } from "@/lib/auth";
-import { renderEmail, sendEmail } from "@/lib/email";
+import { sendEmail } from "@/lib/email";
 import { env } from "@/lib/env";
 import { adminEmailContext, workspaceLink } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
-import { firstName } from "@/lib/utils";
+import { interviewEmail, onboardingEndedEmail, youreInEmail } from "./emails";
 
 /**
  * The admin side of onboarding: the interview, private notes, and the final
@@ -57,26 +57,19 @@ async function emailInterview(user: CurrentUser, editorId: string, interview: z.
   const editor = await editorContact(editorId);
   if (!editor) return;
   const { recipients, accent, companyName } = await adminEmailContext(user.workspace.id);
-  const email = renderEmail({
+  const email = interviewEmail({
+    companyName,
     accent,
-    brand: companyName,
-    heading: moved ? "Your interview has moved" : "Your interview is booked",
-    intro: `Hi ${firstName(editor.full_name)}, ${moved ? "here's the new time for" : "here are the details of"} your interview with ${companyName}.`,
-    rows: [
-      ["When", when(interview.scheduled_at, editor.timezone)],
-      ["Length", `${interview.duration_minutes} minutes`],
-      ["Meeting link", interview.meeting_url],
-      ["Note", interview.note_to_editor],
-    ],
-    cta: { label: "Open your onboarding", url: workspaceLink(env.siteUrl, user.workspace.id, "/onboarding") },
-    footnote: "Can't make it? Reply to this email and we'll find another time.",
+    name: editor.full_name,
+    moved,
+    when: when(interview.scheduled_at, editor.timezone),
+    durationMinutes: interview.duration_minutes,
+    meetingUrl: interview.meeting_url,
+    note: interview.note_to_editor,
+    onboardingUrl: workspaceLink(env.siteUrl, user.workspace.id, "/onboarding"),
+    timeZone: editor.timezone,
   });
-  await sendEmail({
-    to: editor.email,
-    subject: `${moved ? "Interview moved" : "Interview booked"}: ${companyName}`,
-    replyTo: recipients[0],
-    ...email,
-  });
+  await sendEmail({ to: editor.email, replyTo: recipients[0], ...email });
 }
 
 /** Books an interview (or moves the one already booked) and tells the editor. */
@@ -177,14 +170,15 @@ export async function approveEditor(editorId: string): Promise<ActionResult> {
   const editor = await editorContact(editorId);
   if (editor) {
     const { recipients, accent, companyName } = await adminEmailContext(user.workspace.id);
-    const email = renderEmail({
+    const email = youreInEmail({
+      companyName,
       accent,
-      brand: companyName,
-      heading: `You're in: welcome to ${companyName}`,
-      intro: `Congratulations, ${firstName(editor.full_name)}! You've finished onboarding and ${companyName} has approved you. Your full workspace is open: projects, your tasks, attendance and announcements.`,
-      cta: { label: "Open your dashboard", url: workspaceLink(env.siteUrl, user.workspace.id, "/dashboard") },
+      name: editor.full_name,
+      dashboardUrl: workspaceLink(env.siteUrl, user.workspace.id, "/dashboard"),
+      sopsUrl: workspaceLink(env.siteUrl, user.workspace.id, "/sops"),
+      timeZone: editor.timezone,
     });
-    await sendEmail({ to: editor.email, subject: `You're in: welcome to ${companyName}`, replyTo: recipients[0], ...email });
+    await sendEmail({ to: editor.email, replyTo: recipients[0], ...email });
   }
 
   revalidateEditor(editorId);
@@ -204,13 +198,8 @@ export async function rejectEditor(editorId: string, notify: boolean): Promise<A
 
   if (notify && editor) {
     const { recipients, accent, companyName } = await adminEmailContext(user.workspace.id);
-    const email = renderEmail({
-      accent,
-      brand: companyName,
-      heading: `Your onboarding with ${companyName}`,
-      intro: `Thanks for the time you put into onboarding, ${firstName(editor.full_name)}. We've decided not to move forward right now, so your access to the ${companyName} workspace has ended. We wish you the best, and we'll reach out if a better fit comes up.`,
-    });
-    await sendEmail({ to: editor.email, subject: `Your onboarding with ${companyName}`, replyTo: recipients[0], ...email });
+    const email = onboardingEndedEmail({ companyName, accent, name: editor.full_name });
+    await sendEmail({ to: editor.email, replyTo: recipients[0], ...email });
   }
 
   revalidateEditor(editorId);

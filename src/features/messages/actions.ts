@@ -5,13 +5,13 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { fail, fieldErrorsOf, type ActionResult } from "@/lib/action-result";
 import { requireAdmin, requireUser } from "@/lib/auth";
-import { renderEmail, sendEmail } from "@/lib/email";
+import { sendEmail } from "@/lib/email";
 import { env } from "@/lib/env";
 import { adminEmailContext } from "@/lib/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { firstName } from "@/lib/utils";
 import { REACTIONS } from "./constants";
+import { clientReplyEmail } from "./emails";
 
 const MESSAGES: Record<string, string> = {
   empty_message: "Write something first.",
@@ -83,16 +83,15 @@ async function emailClient({
   if (emailedAt && Date.now() - emailedAt < 30 * 60_000 && !(readAt && readAt > emailedAt)) return;
 
   const { recipients, accent, companyName } = await adminEmailContext(workspaceId);
-  const email = renderEmail({
-    brand: companyName,
+  const email = clientReplyEmail({
+    companyName,
     accent,
-    heading: `New message from ${companyName}`,
-    intro: `Hi ${firstName(client.contact_name)}, ${firstName(author)} replied:`,
-    rows: [["Message", body.length > 600 ? `${body.slice(0, 600)}…` : body]],
-    cta: { label: "Open your project portal", url: `${env.siteUrl}/portal/${portal.token}?view=messages` },
-    footnote: "Reply in the portal so the whole team sees it. The link is private to you: please don't share it.",
+    clientName: client.contact_name,
+    author,
+    body,
+    portalUrl: `${env.siteUrl}/portal/${portal.token}?view=messages`,
   });
-  await sendEmail({ to: client.email, subject: `New message from ${companyName}`, replyTo: recipients[0], ...email });
+  await sendEmail({ to: client.email, replyTo: recipients[0], ...email });
   await admin.from("message_threads").update({ client_emailed_at: new Date().toISOString() }).eq("id", threadId);
 }
 

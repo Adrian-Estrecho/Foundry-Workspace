@@ -6,7 +6,8 @@ import { z } from "zod";
 import { SOFTWARE_OPTIONS, SPECIALTY_OPTIONS } from "@/features/applicants/constants";
 import { isTimeZone } from "@/lib/action-result";
 import { getBranding } from "@/lib/branding";
-import { renderEmail, sendEmail } from "@/lib/email";
+import { newApplicantEmail } from "@/features/applicants/emails";
+import { sendEmail } from "@/lib/email";
 import { env } from "@/lib/env";
 import { checkFormToken } from "@/lib/form-token";
 import { adminEmailContext, workspaceLink } from "@/lib/notify";
@@ -103,28 +104,13 @@ export async function submitApplication(_prev: ApplyState, formData: FormData): 
 
   after(async () => {
     const { recipients, accent, companyName } = await adminEmailContext(branding.workspaceId);
-    const email = renderEmail({
+    const email = newApplicantEmail({
+      companyName,
       accent,
-      brand: companyName,
-      heading: `New applicant: ${application.full_name}`,
-      intro: "A new editor application just came in. It's waiting in Applied.",
-      rows: [
-        ["Name", application.full_name],
-        ["Email", application.email],
-        ["Portfolio", application.portfolio_url],
-        ["Software", application.software.join(", ")],
-        ["Specialties", application.specialties.join(", ")],
-        ["Timezone", application.timezone],
-        ["Rate", `$${application.hourly_rate}/h`],
-        ["Hours per week", String(application.weekly_hours)],
-        ["Availability", application.availability_notes],
-      ],
-      cta: {
-        label: "Review in ReEdit",
-        url: workspaceLink(env.siteUrl, branding.workspaceId, `/editors/applicants/${applicantId}`),
-      },
+      applicant: application,
+      reviewUrl: workspaceLink(env.siteUrl, branding.workspaceId, `/editors/applicants/${applicantId}`),
     });
-    await sendEmail({ to: recipients, subject: `New applicant: ${application.full_name}`, replyTo: application.email, ...email });
+    await sendEmail({ to: recipients, replyTo: application.email, ...email });
   });
 
   redirect(thanks);

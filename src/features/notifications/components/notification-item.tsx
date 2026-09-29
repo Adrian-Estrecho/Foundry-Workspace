@@ -2,7 +2,11 @@
 
 import {
   AlarmClockIcon,
+  BadgeCheckIcon,
   BellIcon,
+  CalendarDaysIcon,
+  HourglassIcon,
+  TimerIcon,
   CalendarCheckIcon,
   Clock3Icon,
   OctagonAlertIcon,
@@ -33,6 +37,10 @@ const ICONS: Partial<Record<Enums<"notification_type">, LucideIcon>> = {
   task_overdue: AlarmClockIcon,
   task_assigned: CheckCheckIcon,
   task_due_tomorrow: CalendarClockIcon,
+  task_due_today: CalendarDaysIcon,
+  task_start_reminder: TimerIcon,
+  task_not_started: HourglassIcon,
+  task_approved: BadgeCheckIcon,
   revision_requested: RotateCcwIcon,
   new_announcement: MegaphoneIcon,
   meeting_reminder: CalendarClockIcon,

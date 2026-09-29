@@ -1282,6 +1282,7 @@ export type Database = {
           entity_type: string | null;
           id: string;
           link: string | null;
+          meta: NonNullable<Json>;
           read_at: string | null;
           title: string;
           type: Database["public"]["Enums"]["notification_type"];
@@ -1296,6 +1297,7 @@ export type Database = {
           entity_type?: string | null;
           id?: string;
           link?: string | null;
+          meta?: NonNullable<Json>;
           read_at?: string | null;
           title: string;
           type: Database["public"]["Enums"]["notification_type"];
@@ -1310,6 +1312,7 @@ export type Database = {
           entity_type?: string | null;
           id?: string;
           link?: string | null;
+          meta?: NonNullable<Json>;
           read_at?: string | null;
           title?: string;
           type?: Database["public"]["Enums"]["notification_type"];
@@ -1953,6 +1956,7 @@ export type Database = {
       };
       tasks: {
         Row: {
+          assigned_at: string | null;
           assignee_id: string | null;
           completed_at: string | null;
           created_at: string;
@@ -1967,12 +1971,15 @@ export type Database = {
           progress_pct: number;
           project_id: string | null;
           revision_count: number;
+          start_reminded_at: string | null;
+          start_reminders: number;
           status: Database["public"]["Enums"]["task_status"];
           title: string;
           updated_at: string;
           workspace_id: string;
         };
         Insert: {
+          assigned_at?: string | null;
           assignee_id?: string | null;
           completed_at?: string | null;
           created_at?: string;
@@ -1987,12 +1994,15 @@ export type Database = {
           progress_pct?: number;
           project_id?: string | null;
           revision_count?: number;
+          start_reminded_at?: string | null;
+          start_reminders?: number;
           status?: Database["public"]["Enums"]["task_status"];
           title: string;
           updated_at?: string;
           workspace_id?: string;
         };
         Update: {
+          assigned_at?: string | null;
           assignee_id?: string | null;
           completed_at?: string | null;
           created_at?: string;
@@ -2007,6 +2017,8 @@ export type Database = {
           progress_pct?: number;
           project_id?: string | null;
           revision_count?: number;
+          start_reminded_at?: string | null;
+          start_reminders?: number;
           status?: Database["public"]["Enums"]["task_status"];
           title?: string;
           updated_at?: string;
@@ -2412,9 +2424,14 @@ export type Database = {
           body: string;
           created_at: string;
           email: string;
+          entity_id: string;
+          entity_type: string;
           full_name: string;
           id: string;
           link: string;
+          meta: Json;
+          role: Database["public"]["Enums"]["member_role"];
+          timezone: string;
           title: string;
           type: Database["public"]["Enums"]["notification_type"];
           user_id: string;
@@ -2439,6 +2456,10 @@ export type Database = {
           editor_id: string;
           seconds: number;
         }[];
+      };
+      editor_working_minutes: {
+        Args: { p_editor_id: string; p_from: string; p_to: string; p_workspace_id: string };
+        Returns: number;
       };
       end_shift_for: { Args: { p_editor_id: string; p_ended_at?: string }; Returns: number };
       ensure_client_checklist: { Args: { p_client_id: string }; Returns: undefined };
@@ -2545,6 +2566,7 @@ export type Database = {
       request_notification_emails: { Args: Record<PropertyKey, never>; Returns: undefined };
       resume_work: { Args: { p_keep_task?: boolean; p_task_id?: string }; Returns: undefined };
       run_scheduled_alerts: { Args: Record<PropertyKey, never>; Returns: undefined };
+      run_task_start_reminders: { Args: Record<PropertyKey, never>; Returns: undefined };
       set_active_workspace: { Args: { p_workspace_id: string }; Returns: undefined };
       set_onboarding_step: { Args: { p_done: boolean; p_key: string }; Returns: undefined };
       start_work: { Args: { p_task_id?: string }; Returns: undefined };
@@ -2698,7 +2720,11 @@ export type Database = {
         | "onboarding_rejected"
         | "shift_ended"
         | "blocker_reported"
-        | "new_message";
+        | "new_message"
+        | "task_start_reminder"
+        | "task_not_started"
+        | "task_due_today"
+        | "task_approved";
       payment_status: "unpaid" | "paid";
       project_status:
         | "brief_received"
@@ -2869,6 +2895,10 @@ export const Constants = {
         "shift_ended",
         "blocker_reported",
         "new_message",
+        "task_start_reminder",
+        "task_not_started",
+        "task_due_today",
+        "task_approved",
       ],
       payment_status: ["unpaid", "paid"],
       project_status: [

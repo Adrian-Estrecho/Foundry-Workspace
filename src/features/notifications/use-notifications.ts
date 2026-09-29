@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { subscribeAsUser } from "@/lib/supabase/realtime";
 import type { Tables } from "@/types/database";
 import { NOTIFICATION_PAGE_SIZE } from "./constants";
+import { playNotificationSound, primeNotificationSound } from "./sound";
 
 export type Notification = Tables<"notifications">;
 export type NotificationFilter = "all" | "unread";
@@ -140,10 +141,12 @@ const newestPage = (userId: string) =>
 /**
  * The signed-in user's notifications, shared by the bell and the full list.
  * New rows arrive live over Realtime (RLS limits the stream to the user's own
- * rows) and pop a toast. Older rows load a page at a time.
+ * rows) and pop a toast with a chime. Older rows load a page at a time.
  */
 export function useNotifications(userId: string, initial: Notification[], initialUnread: number) {
   const [state, dispatch] = React.useReducer(reducer, { rows: initial, unread: initialUnread }, init);
+
+  React.useEffect(() => primeNotificationSound(), []);
 
   // A router.refresh() re-renders the layout with fresh rows and counts.
   const [synced, setSynced] = React.useState({ initial, initialUnread });
@@ -164,6 +167,7 @@ export function useNotifications(userId: string, initial: Notification[], initia
               const row = payload.new as Notification;
               dispatch({ type: "insert", row });
               toast(row.title, { description: row.body ?? undefined });
+              playNotificationSound();
             },
           )
           .on(
@@ -175,6 +179,7 @@ export function useNotifications(userId: string, initial: Notification[], initia
               // Surfaced again just now by something new (a message in the same thread).
               if (!row.read_at && Date.now() - Date.parse(row.created_at) < 30_000) {
                 toast(row.title, { description: row.body ?? undefined });
+                playNotificationSound();
               }
             },
           ),

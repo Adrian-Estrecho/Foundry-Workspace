@@ -1,10 +1,16 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
-import { renderEmail, sendEmail } from "@/lib/email";
+import {
+  notificationEmail,
+  type ClaimedNotification,
+  type EmailMessage,
+  type EmailTask,
+} from "@/features/notifications/emails";
+import { sendEmail } from "@/lib/email";
 import { env } from "@/lib/env";
 import { workspaceLink } from "@/lib/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { Enums } from "@/types/database";
+import { one } from "@/lib/utils";
 
 /**
  * Emails notifications nobody has seen in the app. pg_cron calls this
@@ -25,48 +31,135 @@ function authorized(request: Request) {
   return given.length === expected.length && timingSafeEqual(given, expected);
 }
 
-const KIND: Partial<Record<Enums<"notification_type">, string>> = {
-  task_assigned: "Task",
-  task_due_tomorrow: "Due soon",
-  revision_requested: "Changes",
-  task_for_review: "Review",
-  task_overdue: "Overdue",
-  mention: "Mention",
-  new_message: "Message",
-  new_announcement: "Announcement",
-  missed_clock_in: "Attendance",
-  offline_with_overdue: "Attendance",
-  blocker_reported: "Blocker",
-  shift_ended: "Attendance",
-  member_joined: "Team",
-  onboarding_ready: "Team",
-  editor_onboarded: "Team",
+type Admin = ReturnType<typeof createAdminClient>;
+
+const taskIdsOf = (n: ClaimedNotification) => {
+  const listed = (n.meta as { task_ids?: unknown } | null)?.task_ids;
+  return [
+    ...(n.entity_type === "task" && n.entity_id ? [n.entity_id] : []),
+    ...(Array.isArray(listed) ? listed.filter((id): id is string => typeof id === "string") : []),
+  ];
 };
 
-const ACTION: Partial<Record<Enums<"notification_type">, string>> = {
-  new_message: "Reply",
-  new_announcement: "Read it",
-  task_for_review: "Review it",
-  mention: "Open the task",
-  task_assigned: "Open the task",
-  task_due_tomorrow: "Open the task",
-  task_overdue: "Open the task",
-  revision_requested: "See the feedback",
-};
+async function loadTasks(admin: Admin, ids: string[]) {
+  const tasks = new Map<string, EmailTask>();
+  if (ids.length === 0) return tasks;
+  const { data } = await admin
+    .from("tasks")
+    .select(
+      "id, title, description, due_date, priority, status, is_trial, assignee_id, project:projects(name, client:clients(company, contact_name))",
+    )
+    .in("id", ids);
+  const assigneeIds = [...new Set((data ?? []).flatMap((t) => (t.assignee_id ? [t.assignee_id] : [])))];
+  const { data: people } = assigneeIds.length
+    ? await admin.from("profiles").select("id, full_name").in("id", assigneeIds)
+    : { data: [] };
+  const names = new Map((people ?? []).map((p) => [p.id, p.full_name]));
 
-type Claimed = {
-  id: string;
-  workspace_id: string;
-  user_id: string;
-  type: Enums<"notification_type">;
-  title: string;
-  body: string | null;
-  link: string | null;
-  email: string;
-  full_name: string;
-  workspace_name: string;
-  accent: string;
-};
+  for (const t of data ?? []) {
+    const project = one(t.project);
+    const client = one(project?.client);
+    tasks.set(t.id, {
+      id: t.id,
+      title: t.title,
+      description: t.description,
+      due_date: t.due_date,
+      priority: t.priority,
+      status: t.status,
+      is_trial: t.is_trial,
+      assignee_id: t.assignee_id,
+      assignee: t.assignee_id ? (names.get(t.assignee_id) ?? null) : null,
+      project: project?.name ?? null,
+      client: client?.company ?? client?.contact_name ?? null,
+    });
+  }
+  return tasks;
+}
+
+/**
+ * The newest messages from the other side of each thread that the reader
+ * hasn't seen, up to three, oldest first.
+ */
+async function loadMessages(admin: Admin, notifications: ClaimedNotification[]) {
+  const messages = new Map<string, EmailMessage[]>();
+  const threads = notifications.filter((n) => n.type === "new_message" && n.entity_id);
+  if (threads.length === 0) return messages;
+  const threadIds = [...new Set(threads.map((n) => n.entity_id!))];
+
+  const [{ data: rows }, { data: reads }] = await Promise.all([
+    admin
+      .from("messages")
+      .select("thread_id, sender, author_id, body, created_at, thread:message_threads(client:clients(company, contact_name))")
+      .in("thread_id", threadIds)
+      .order("created_at", { ascending: false })
+      .limit(threadIds.length * 10),
+    admin
+      .from("message_reads")
+      .select("thread_id, user_id, last_read_at")
+      .in("thread_id", threadIds)
+      .in("user_id", [...new Set(threads.map((n) => n.user_id))]),
+  ]);
+  const authorIds = [...new Set((rows ?? []).flatMap((m) => (m.author_id ? [m.author_id] : [])))];
+  const { data: people } = authorIds.length
+    ? await admin.from("profiles").select("id, full_name").in("id", authorIds)
+    : { data: [] };
+  const names = new Map((people ?? []).map((p) => [p.id, p.full_name]));
+
+  for (const n of threads) {
+    const readAt = reads?.find((r) => r.thread_id === n.entity_id && r.user_id === n.user_id)?.last_read_at;
+    const theirs = (rows ?? []).filter(
+      (m) =>
+        m.thread_id === n.entity_id &&
+        (n.role === "editor" ? m.sender === "admin" : m.sender !== "admin") &&
+        (!readAt || m.created_at > readAt),
+    );
+    messages.set(
+      n.entity_id!,
+      theirs
+        .slice(0, 3)
+        .reverse()
+        .map((m) => {
+          const client = one(one(m.thread)?.client);
+          return {
+            author: m.author_id ? (names.get(m.author_id) ?? "Someone") : (client?.company ?? client?.contact_name ?? "Your client"),
+            body: m.body,
+            at: m.created_at,
+          };
+        }),
+    );
+  }
+  return messages;
+}
+
+/** The comment behind each mention or change request. */
+async function loadComments(admin: Admin, notifications: ClaimedNotification[]) {
+  const comments = new Map<string, EmailMessage>();
+  const wanted = notifications.filter(
+    (n) => (n.type === "mention" || n.type === "revision_requested") && n.entity_type === "task" && n.entity_id,
+  );
+  if (wanted.length === 0) return comments;
+
+  const { data } = await admin
+    .from("task_comments")
+    .select("task_id, author_id, body, mentions, created_at, author:profiles(full_name)")
+    .in("task_id", [...new Set(wanted.map((n) => n.entity_id!))])
+    .order("created_at", { ascending: false })
+    .limit(wanted.length * 10);
+
+  for (const n of wanted) {
+    const before = Date.parse(n.created_at) + 5_000;
+    const comment = (data ?? []).find(
+      (c) =>
+        c.task_id === n.entity_id &&
+        Date.parse(c.created_at) <= before &&
+        (n.type === "mention" ? c.mentions.includes(n.user_id) : c.author_id !== n.user_id),
+    );
+    if (comment && (n.type === "mention" || Date.parse(n.created_at) - Date.parse(comment.created_at) < 5 * 60_000)) {
+      comments.set(n.id, { author: one(comment.author)?.full_name ?? "Someone", body: comment.body, at: comment.created_at });
+    }
+  }
+  return comments;
+}
 
 export async function POST(request: Request) {
   if (!authorized(request)) return new NextResponse("Unauthorized", { status: 401 });
@@ -78,43 +171,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "claim_failed" }, { status: 500 });
   }
 
-  const groups = new Map<string, Claimed[]>();
-  for (const row of (data ?? []) as Claimed[]) {
+  const claimed = (data ?? []) as ClaimedNotification[];
+  const groups = new Map<string, ClaimedNotification[]>();
+  for (const row of claimed) {
     const key = `${row.user_id}:${row.workspace_id}`;
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
 
+  // Details only matter for notifications emailed on their own.
+  const alone = [...groups.values()].filter((items) => items.length === 1).map(([n]) => n);
+  const [tasks, messages, comments] = await Promise.all([
+    loadTasks(admin, [...new Set(claimed.flatMap(taskIdsOf))]),
+    loadMessages(admin, alone),
+    loadComments(admin, alone),
+  ]);
+
   for (const items of groups.values()) {
     const [first] = items;
-    const link = (path: string | null) => workspaceLink(env.siteUrl, first.workspace_id, path ?? "/dashboard");
-    const footnote = `You get these when something in ${first.workspace_name} needs you while you're away from ReEdit. Choose which emails you get in Settings.`;
-
-    const email =
-      items.length === 1
-        ? renderEmail({
-            brand: first.workspace_name,
-            accent: first.accent,
-            heading: first.title,
-            intro: first.body ?? undefined,
-            cta: { label: ACTION[first.type] ?? "Open in ReEdit", url: link(first.link) },
-            footnote,
-          })
-        : renderEmail({
-            brand: first.workspace_name,
-            accent: first.accent,
-            heading: `${items.length} updates for you`,
-            intro: `Hi ${first.full_name.split(" ")[0] || "there"}, here's what happened in ${first.workspace_name}:`,
-            rows: items.slice(0, 12).map((n) => [KIND[n.type] ?? "Update", n.body ? `${n.title}\n${n.body}` : n.title]),
-            cta: { label: "Open ReEdit", url: link("/dashboard") },
-            footnote: items.length > 12 ? `And ${items.length - 12} more in the app. ${footnote}` : footnote,
-          });
-
-    await sendEmail({
-      to: first.email,
-      subject: items.length === 1 ? first.title : `${items.length} updates in ${first.workspace_name}`,
-      ...email,
+    const email = notificationEmail(items, {
+      tasks,
+      messages,
+      comments,
+      link: (path) => workspaceLink(env.siteUrl, first.workspace_id, path),
     });
+    await sendEmail({ to: first.email, ...email });
   }
 
-  return NextResponse.json({ notifications: data?.length ?? 0, emails: groups.size });
+  return NextResponse.json({ notifications: claimed.length, emails: groups.size });
 }
