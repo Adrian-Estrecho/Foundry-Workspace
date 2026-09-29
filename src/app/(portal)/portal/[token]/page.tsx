@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
+import { MessageSquareIcon } from "lucide-react";
 import { AccentStyle } from "@/components/theme/accent-style";
-import { PORTAL_VIEWS, type PortalView } from "@/features/portal/constants";
+import { ModeToggle } from "@/components/theme/mode-toggle";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { PORTAL_TABS, PORTAL_VIEWS, type PortalView } from "@/features/portal/constants";
 import { PortalMessages } from "@/features/portal/components/portal-messages";
 import { PortalRefresh } from "@/features/portal/components/portal-refresh";
 import { PortalBoard, PortalCalendar, PortalList, PortalOverview } from "@/features/portal/components/portal-views";
@@ -48,7 +51,7 @@ export default async function PortalPage(props: PageProps<"/portal/[token]">) {
   }
 
   const requestedView = first(search.view);
-  const view: PortalView = PORTAL_VIEWS.some((v) => v.value === requestedView) ? (requestedView as PortalView) : "overview";
+  const view: PortalView = PORTAL_VIEWS.includes(requestedView as PortalView) ? (requestedView as PortalView) : "overview";
   const requestedProject = first(search.project);
   const project = portal.projects.find((p) => p.id === requestedProject) ?? null;
   const requestedMonth = first(search.month);
@@ -69,7 +72,10 @@ export default async function PortalPage(props: PageProps<"/portal/[token]">) {
           <WorkspaceTile name={portal.workspace.name} logoUrl={portal.workspace.logoUrl} className="size-9 text-base" />
           <span className="font-heading text-lg font-semibold tracking-tight">{portal.workspace.name}</span>
         </div>
-        <span className="rounded-full bg-muted px-3 py-1 text-sm text-muted-foreground">Project portal · {portal.client.name}</span>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-muted px-3 py-1 text-sm text-muted-foreground">Project portal · {portal.client.name}</span>
+          <ModeToggle />
+        </div>
       </header>
 
       <div className="mb-6">
@@ -83,7 +89,7 @@ export default async function PortalPage(props: PageProps<"/portal/[token]">) {
 
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <nav aria-label="Portal views" className="inline-flex max-w-full overflow-x-auto rounded-lg bg-muted p-0.5 scrollbar-none">
-          {PORTAL_VIEWS.map((item) => {
+          {PORTAL_TABS.map((item) => {
             const active = item.value === view;
             return (
               <Link
@@ -92,26 +98,46 @@ export default async function PortalPage(props: PageProps<"/portal/[token]">) {
                 scroll={false}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-sm whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "inline-flex items-center rounded-md px-3 py-1 text-sm whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 {item.label}
-                {item.value === "messages" && portal.unread > 0 && (
-                  <span className="grid min-w-5 place-items-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground tabular">
-                    {portal.unread}
-                    <span className="sr-only"> new</span>
-                  </span>
-                )}
               </Link>
             );
           })}
         </nav>
-        {view !== "messages" && portal.projects.length > 1 && (
-          <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-3">
+          {view !== "messages" && portal.projects.length > 1 && (
             <ProjectFilter projects={portal.projects.map((p) => ({ id: p.id, name: p.name }))} value={project?.id ?? null} />
-          </div>
-        )}
+          )}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link
+                href={portalHref(link, "messages")}
+                scroll={false}
+                aria-current={view === "messages" ? "page" : undefined}
+                aria-label={portal.unread > 0 ? `Messages, ${portal.unread} new` : "Messages"}
+                className="relative rounded-lg bg-muted p-0.5 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <span
+                  className={cn(
+                    "grid size-7 place-items-center rounded-md transition-colors",
+                    view === "messages" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <MessageSquareIcon className="size-4" />
+                </span>
+                {portal.unread > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 grid h-4.5 min-w-4.5 place-items-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground ring-2 ring-background tabular">
+                    {portal.unread > 99 ? "99+" : portal.unread}
+                  </span>
+                )}
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent>Messages</TooltipContent>
+          </Tooltip>
+        </div>
       </div>
 
       {view === "overview" && (
