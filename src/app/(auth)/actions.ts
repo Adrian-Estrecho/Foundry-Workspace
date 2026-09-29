@@ -33,6 +33,24 @@ export async function signIn(_prev: FormState, formData: FormData): Promise<Form
   redirect(safeNextPath(parsed.data.next));
 }
 
+/**
+ * Sends the visitor to Google, which returns them to /auth/confirm with a
+ * PKCE code. Sign-up is disabled, so only emails that already have a
+ * Foundry account get in; anyone else lands back on /login with an error.
+ */
+export async function signInWithGoogle(formData: FormData) {
+  const next = safeNextPath(String(formData.get("next") ?? ""));
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${env.siteUrl}/auth/confirm?next=${encodeURIComponent(next)}`,
+      queryParams: { prompt: "select_account" },
+    },
+  });
+  redirect(error || !data.url ? "/login?error=google" : data.url);
+}
+
 export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();

@@ -114,7 +114,7 @@ Row Level Security enforces this on every table (see `supabase/migrations/202609
 - Editors can't change their own role.
 - Attendance rows are read-only to editors and are written only by database functions.
 
-Sign-up is disabled, so accounts are created by admins only.
+Sign-up is disabled, so accounts are created by admins only. **Continue with Google** on the login page signs in anyone whose Google address matches an existing account; Supabase links the Google identity to that account by email. A Google address with no account is turned away, because sign-up is disabled.
 
 ### Client onboarding
 
@@ -195,6 +195,7 @@ One hex value is converted to OKLCH (`src/lib/theme.ts`), clamped for contrast i
    - Email templates: paste `supabase/templates/invite.html` and `recovery.html`.
    - Email OTP expiry: consider raising it (for example to 24 hours) so invite links sent by Foundry don't expire before editors open them. Admins can always resend an invite from the editor's profile.
    - SMTP: use Resend's SMTP settings, so auth emails come from your domain.
+   - Google sign-in: under **Sign In / Providers → Google**, turn it on and paste the Google OAuth client ID and secret. In Google Cloud, the OAuth client's **Authorized redirect URIs** must include `https://<ref>.supabase.co/auth/v1/callback`. For local development, also add `http://127.0.0.1:54321/auth/v1/callback`, and put the secret in `.env.local` as `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET`.
 3. **Deploy to Vercel:** import the repo, then set the variables from `.env.example`, with `NEXT_PUBLIC_SITE_URL=https://app.foundrymedia.co`.
 4. **Domain:** add `app.foundrymedia.co` to the Vercel project, and verify the sending domain in Resend.
 

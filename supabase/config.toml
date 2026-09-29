@@ -172,6 +172,7 @@ enable_refresh_token_rotation = true
 # Requires enable_refresh_token_rotation = true.
 refresh_token_reuse_interval = 10
 # Foundry is invite-only: accounts are created by admins (seed, or approving an applicant).
+# Also what stops Google sign-in from creating accounts, so keep it off.
 enable_signup = false
 # Allow/disallow anonymous sign-ins to your project.
 enable_anonymous_sign_ins = false
@@ -337,6 +338,16 @@ url = ""
 skip_nonce_check = false
 # If enabled, it will allow the user to successfully authenticate when the provider does not return an email address.
 email_optional = false
+
+# "Continue with Google" on /login. With `enable_signup = false` it only signs in people who
+# already have an account (Google is linked to it by email); it never creates accounts.
+# Google Cloud → the OAuth client's authorized redirect URIs must include
+# http://127.0.0.1:54321/auth/v1/callback. Put the client secret in .env.local.
+[auth.external.google]
+enabled = true
+client_id = "997073575516-u17m091a3rbhf2eslnafio6nm4o4mnse.apps.googleusercontent.com"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+skip_nonce_check = false
 
 # Allow Solana wallet holders to sign in to your project via the Sign in with Solana (SIWS, EIP-4361) standard.
 # You can configure "web3" rate limit in the [auth.rate_limit] section and set up [auth.captcha] if self-hosting.

@@ -6,12 +6,19 @@ import { safeNextPath } from "@/lib/utils";
 const OTP_TYPES: EmailOtpType[] = ["invite", "recovery", "magiclink", "signup", "email", "email_change"];
 
 /**
- * Landing point for links in auth emails (invite, password reset).
- * Supports both the token-hash links used by Foundry's email templates and
- * PKCE `?code=` redirects.
+ * Landing point for links in auth emails (invite, password reset) and for
+ * Google sign-in. Supports both the token-hash links used by Foundry's email
+ * templates and PKCE `?code=` redirects.
  */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl;
+
+  // Supabase reports a failed Google sign-in here as ?error=…&error_code=….
+  if (searchParams.has("error")) {
+    const reason = searchParams.get("error_code") === "signup_disabled" ? "no_account" : "google";
+    return NextResponse.redirect(new URL(`/login?error=${reason}`, origin));
+  }
+
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
   const code = searchParams.get("code");

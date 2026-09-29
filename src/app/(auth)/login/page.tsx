@@ -5,6 +5,8 @@ export const metadata: Metadata = { title: "Sign in" };
 
 const LINK_ERRORS: Record<string, string> = {
   link: "That link is invalid or has expired. Ask for a new one.",
+  no_account: "No Foundry account uses that Google address. Sign in with the email your admin invited.",
+  google: "Google sign-in didn't finish. Try again, or use your email and password.",
 };
 
 export default async function LoginPage(props: PageProps<"/login">) {
