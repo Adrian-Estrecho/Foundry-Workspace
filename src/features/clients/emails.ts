@@ -1,3 +1,5 @@
+import { answerRows } from "@/features/forms/emails";
+import type { Answer } from "@/features/forms/fields";
 import { renderEmail } from "@/lib/email/render";
 import { formatDay } from "@/lib/dates";
 import { firstName } from "@/lib/utils";
@@ -7,8 +9,11 @@ export function newLeadEmail({
   companyName,
   accent,
   lead,
+  answers = [],
   clientUrl,
 }: {
+  /** Answers to the workspace's own questions. */
+  answers?: Answer[];
   companyName: string;
   accent: string;
   lead: {
@@ -50,6 +55,7 @@ export function newLeadEmail({
         ["Email", lead.email],
         ["Phone", lead.phone],
         ["References", lead.reference_links.join("\n")],
+        ...answerRows(answers),
       ],
       cta: { label: "Open the lead", url: clientUrl },
       secondary: { label: `Email ${firstName(lead.name)}`, url: `mailto:${lead.email}` },

@@ -1,11 +1,13 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   BriefcaseBusinessIcon,
   ClapperboardIcon,
+  ClipboardListIcon,
   Clock3Icon,
   CopyIcon,
   ExternalLinkIcon,
@@ -16,6 +18,7 @@ import {
   Loader2Icon,
   PackageIcon,
   PaletteIcon,
+  PencilRulerIcon,
   UserPlusIcon,
   type LucideIcon,
 } from "lucide-react";
@@ -25,11 +28,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { FORM_NAMES, type FormKind } from "@/features/forms/fields";
 import type { Workspace } from "@/lib/auth";
+import { formatDay } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { updateHiring, updateWorkspace } from "./actions";
 import { BrandPreview } from "./brand-preview";
 import { LogoUpload } from "./logo-upload";
+
+/** A public form at a glance, for the Forms section. */
+export type FormSummary = { questions: number; own: number; updatedAt: string | null };
 
 export type TestTemplate = {
   test_title: string | null;
@@ -58,6 +66,7 @@ type TextField = Exclude<Field, "accepting_applications" | "default_accent">;
 const SECTIONS = [
   { id: "brand", label: "Brand", icon: PaletteIcon, fields: ["name", "default_accent"] },
   { id: "links", label: "Public links", icon: Link2Icon, fields: ["slug", "accepting_applications"] },
+  { id: "forms", label: "Forms", icon: ClipboardListIcon, fields: [] },
   { id: "onboarding", label: "Onboarding", icon: PackageIcon, fields: ["contract_template_url", "frameio_invite_url", "asset_pack_url"] },
   { id: "attendance", label: "Attendance", icon: Clock3Icon, fields: ["missed_clock_in_grace_minutes"] },
   { id: "hiring", label: "Test edit", icon: ClapperboardIcon, fields: TEST_FIELDS },
@@ -120,11 +129,13 @@ export function WorkspaceSettings({
   template,
   logoUrl,
   siteUrl,
+  formSummaries,
 }: {
   workspace: Workspace;
   template: TestTemplate | null;
   logoUrl: string | null;
   siteUrl: string;
+  formSummaries: Record<FormKind, FormSummary>;
 }) {
   const router = useRouter();
   const formRef = React.useRef<HTMLFormElement>(null);
@@ -210,7 +221,7 @@ export function WorkspaceSettings({
   const linksLive = values.slug === saved.slug;
   const resourcesAdded = RESOURCES.filter((r) => isLink(values[r.field])).length;
   const graceMinutes = Math.min(Math.max(Math.round(Number(values.missed_clock_in_grace_minutes)) || 0, 0), 720);
-  const [brand, links, onboarding, attendance, hiring] = SECTIONS;
+  const [brand, links, formsSection, onboarding, attendance, hiring] = SECTIONS;
 
   return (
     <form
@@ -260,9 +271,9 @@ export function WorkspaceSettings({
         })}
       </nav>
 
-      <div className="grid min-w-0 grid-cols-1 gap-5">
-        <Section section={brand} description="How your workspace looks to your team, applicants and clients.">
-          <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_17rem]">
+      <div className="grid min-w-0 grid-cols-1 content-start gap-5 2xl:grid-cols-2">
+        <Section section={brand} description="How your workspace looks to your team, applicants and clients." className="2xl:col-span-2">
+          <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_20rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
             <div className="grid content-start gap-6">
               <LogoUpload workspaceId={workspace.id} logoUrl={logo} onChange={setLogo} />
               <FormRow label="Workspace name" error={fieldErrors.name}>
@@ -337,15 +348,26 @@ export function WorkspaceSettings({
         </Section>
 
         <Section
+          section={formsSection}
+          description="Change the questions on your public forms: add your own, drag them into order, take some off."
+        >
+          <div className="grid gap-3">
+            <FormCard kind="apply" icon={UserPlusIcon} summary={formSummaries.apply} url={`${siteUrl}/apply/${saved.slug}`} />
+            <FormCard kind="intake" icon={BriefcaseBusinessIcon} summary={formSummaries.intake} url={`${siteUrl}/intake/${saved.slug}`} />
+          </div>
+        </Section>
+
+        <Section
           section={onboarding}
           description="Links every new editor gets while they onboard."
+          className="2xl:col-span-2"
           badge={
             <Badge tone={resourcesAdded === RESOURCES.length ? "success" : "muted"}>
               {resourcesAdded} of {RESOURCES.length} added
             </Badge>
           }
         >
-          <div className="grid gap-3">
+          <div className="grid gap-3 2xl:grid-cols-3">
             {RESOURCES.map((resource) => {
               const value = values[resource.field];
               const added = isLink(value);
@@ -393,7 +415,7 @@ export function WorkspaceSettings({
           </div>
         </Section>
 
-        <Section section={attendance} description="When to flag an editor who hasn't started their shift.">
+        <Section section={attendance} description="When to flag an editor who hasn't started their shift." className="2xl:col-span-2">
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-[13rem_minmax(0,1fr)] sm:items-start">
             <FormRow label="Missed start alert" error={fieldErrors.missed_clock_in_grace_minutes} hint="0 to 720 minutes after the shift starts.">
               <span className="relative block">
@@ -409,6 +431,7 @@ export function WorkspaceSettings({
 
         <Section
           section={hiring}
+          className="2xl:col-span-2"
           description="Given to every editor who joins with an invitation, due a few days later. Leave the title empty to assign one by hand from their profile."
           badge={
             <Badge tone={values.test_title.trim() ? "success" : "muted"}>
@@ -445,7 +468,7 @@ export function WorkspaceSettings({
         <div
           inert={!dirty}
           className={cn(
-            "sticky bottom-4 z-20 transition-[opacity,translate] duration-200",
+            "sticky bottom-4 z-20 transition-[opacity,translate] duration-200 2xl:col-span-2",
             dirty ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0",
           )}
         >
@@ -475,15 +498,17 @@ function Section({
   section,
   description,
   badge,
+  className,
   children,
 }: {
   section: (typeof SECTIONS)[number];
   description: React.ReactNode;
   badge?: React.ReactNode;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section id={section.id} aria-labelledby={`${section.id}-title`} className="scroll-mt-20 rounded-xl border bg-card">
+    <section id={section.id} aria-labelledby={`${section.id}-title`} className={cn("scroll-mt-20 rounded-xl border bg-card", className)}>
       <header className="flex flex-wrap items-start gap-x-3.5 gap-y-2 border-b px-5 py-4">
         <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/12 text-primary">
           <section.icon className="size-4.5" />
@@ -512,6 +537,45 @@ function Badge({ tone, children }: { tone: "success" | "muted"; children: React.
       <span className={cn("size-1.5 rounded-full", tone === "success" ? "bg-success" : "bg-muted-foreground/60")} />
       {children}
     </span>
+  );
+}
+
+function FormCard({
+  kind,
+  icon: Icon,
+  summary,
+  url,
+}: {
+  kind: FormKind;
+  icon: LucideIcon;
+  summary: FormSummary;
+  url: string;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-4 rounded-lg bg-surface p-4 ring-1 ring-border">
+      <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary/12 text-primary">
+        <Icon className="size-4.5" />
+      </span>
+      <div className="min-w-0 flex-1 basis-48">
+        <p className="text-sm font-medium">{FORM_NAMES[kind]}</p>
+        <p className="text-xs text-muted-foreground">
+          {summary.questions} questions · {summary.own > 0 ? `${summary.own} of your own` : "standard questions"}
+          {summary.updatedAt && ` · edited ${formatDay(summary.updatedAt.slice(0, 10), { month: "short", day: "numeric" })}`}
+        </p>
+      </div>
+      <div className="flex shrink-0 gap-1">
+        <Button asChild variant="ghost" size="icon-sm">
+          <a href={url} target="_blank" rel="noreferrer" aria-label={`Open the ${FORM_NAMES[kind].toLowerCase()}`}>
+            <ExternalLinkIcon />
+          </a>
+        </Button>
+        <Button asChild size="sm">
+          <Link href={`/workspace/forms/${kind}`}>
+            <PencilRulerIcon /> Edit form
+          </Link>
+        </Button>
+      </div>
+    </div>
   );
 }
 

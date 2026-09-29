@@ -11,6 +11,7 @@ import { FilesPanel } from "@/features/clients/components/detail/files-panel";
 import { NotesPanel } from "@/features/clients/components/detail/notes-panel";
 import { PaymentsPanel } from "@/features/clients/components/detail/payments-panel";
 import { ProjectsPanel } from "@/features/clients/components/detail/projects-panel";
+import { AnswerList } from "@/features/forms/components/answer-list";
 import { getClientDetail } from "@/features/clients/queries";
 import { ClientPortalPanel } from "@/features/portal/components/portal-admin";
 import { requireAdmin } from "@/lib/auth";
@@ -107,6 +108,7 @@ export default async function ClientPage(props: PageProps<"/clients/[id]">) {
                   <p className="mt-1.5 rounded-2xl bg-surface p-3 text-sm whitespace-pre-line ring-1 ring-border">{lead.notes}</p>
                 </div>
               )}
+              <AnswerList answers={lead.answers} className="mt-5" />
             </Panel>
           )}
         </div>

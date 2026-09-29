@@ -242,6 +242,7 @@ export type Database = {
       applicants: {
         Row: {
           admin_notes: string | null;
+          answers: NonNullable<Json>;
           availability_notes: string | null;
           created_at: string;
           editor_id: string | null;
@@ -263,6 +264,7 @@ export type Database = {
         };
         Insert: {
           admin_notes?: string | null;
+          answers?: NonNullable<Json>;
           availability_notes?: string | null;
           created_at?: string;
           editor_id?: string | null;
@@ -284,6 +286,7 @@ export type Database = {
         };
         Update: {
           admin_notes?: string | null;
+          answers?: NonNullable<Json>;
           availability_notes?: string | null;
           created_at?: string;
           editor_id?: string | null;
@@ -956,6 +959,7 @@ export type Database = {
       };
       leads: {
         Row: {
+          answers: NonNullable<Json>;
           budget_range: string | null;
           company: string | null;
           created_at: string;
@@ -970,6 +974,7 @@ export type Database = {
           workspace_id: string;
         };
         Insert: {
+          answers?: NonNullable<Json>;
           budget_range?: string | null;
           company?: string | null;
           created_at?: string;
@@ -984,6 +989,7 @@ export type Database = {
           workspace_id?: string;
         };
         Update: {
+          answers?: NonNullable<Json>;
           budget_range?: string | null;
           company?: string | null;
           created_at?: string;
@@ -2124,6 +2130,45 @@ export type Database = {
           },
         ];
       };
+      workspace_forms: {
+        Row: {
+          fields: NonNullable<Json>;
+          kind: string;
+          updated_at: string;
+          updated_by: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          fields: NonNullable<Json>;
+          kind: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          workspace_id?: string;
+        };
+        Update: {
+          fields?: NonNullable<Json>;
+          kind?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workspace_forms_updated_by_fkey";
+            columns: ["updated_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "workspace_forms_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       workspace_invitations: {
         Row: {
           accepted_at: string | null;
@@ -2582,6 +2627,7 @@ export type Database = {
       };
       submit_application: {
         Args: {
+          p_answers?: Json;
           p_availability_notes?: string;
           p_email: string;
           p_full_name: string;
@@ -2597,6 +2643,7 @@ export type Database = {
       };
       submit_intake: {
         Args: {
+          p_answers?: Json;
           p_budget_range?: string;
           p_company?: string;
           p_deadline?: string;

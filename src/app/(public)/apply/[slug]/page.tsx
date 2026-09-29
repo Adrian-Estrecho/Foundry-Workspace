@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
 import { ClockIcon, GlobeIcon, ShieldCheckIcon } from "lucide-react";
+import { PublicForm } from "@/features/forms/components/public-form";
+import { getPublicForm } from "@/features/forms/queries";
 import { getBranding } from "@/lib/branding";
 import { issueFormToken } from "@/lib/form-token";
 import { PublicHeader, PublicNotice } from "../../public-header";
-import { ApplyForm } from "../apply-form";
+import { submitApplication } from "../actions";
 
 export async function generateMetadata(props: PageProps<"/apply/[slug]">): Promise<Metadata> {
   const branding = await getBranding((await props.params).slug);
@@ -51,7 +53,15 @@ export default async function ApplyPage(props: PageProps<"/apply/[slug]">) {
               </li>
             </ul>
           </div>
-          <ApplyForm slug={slug} token={issueFormToken(`apply:${slug}`)} timeZones={Intl.supportedValuesOf("timeZone")} />
+          <PublicForm
+            kind="apply"
+            slug={slug}
+            token={issueFormToken(`apply:${slug}`)}
+            fields={await getPublicForm(branding.workspaceId, "apply")}
+            timeZones={Intl.supportedValuesOf("timeZone")}
+            submitLabel="Send application"
+            action={submitApplication}
+          />
         </>
       ) : (
         <PublicNotice

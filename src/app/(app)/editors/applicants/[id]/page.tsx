@@ -8,6 +8,7 @@ import { ApplicantHeader } from "@/features/applicants/components/detail/applica
 import { DecisionPanel } from "@/features/applicants/components/detail/decision-panel";
 import { ReviewPanel } from "@/features/applicants/components/detail/review-panel";
 import { getApplicantDetail } from "@/features/applicants/queries";
+import { AnswerList } from "@/features/forms/components/answer-list";
 import { requireAdmin } from "@/lib/auth";
 import { timeAgo } from "@/lib/dates";
 import { localTime } from "@/lib/time-zones";
@@ -79,6 +80,7 @@ export default async function ApplicantPage(props: PageProps<"/editors/applicant
                 </p>
               </div>
             )}
+            <AnswerList answers={applicant.answers} className="mt-5" />
           </Panel>
 
           <ReviewPanel applicantId={applicant.id} rating={applicant.rating} notes={applicant.admin_notes} />
