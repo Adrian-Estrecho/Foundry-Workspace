@@ -7,7 +7,7 @@ import { AccentStyle } from "@/components/theme/accent-style";
 import { getWorkState } from "@/features/attendance/queries";
 import { NOTIFICATION_PAGE_SIZE } from "@/features/notifications/constants";
 import { WorkspaceSync } from "@/features/workspaces/components/workspace-switcher";
-import { memberLabel } from "@/features/workspaces/constants";
+import { memberLabel, workspaceLogoUrl } from "@/features/workspaces/constants";
 import { isOnboarding, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
@@ -49,6 +49,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     id: m.workspace.id,
     name: m.workspace.name,
     label: memberLabel(m.role, m.status),
+    logoUrl: workspaceLogoUrl(m.workspace.logo_path),
   });
   const switcher: SwitcherProps = {
     current: toSwitcher({ workspace: user.workspace, role: user.memberRole, status: user.memberStatus }),

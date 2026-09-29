@@ -2,12 +2,12 @@ import { AccentStyle } from "@/components/theme/accent-style";
 import { WorkspaceTile } from "@/features/workspaces/components/workspace-switcher";
 
 /** The company a public page belongs to, in its accent colour. */
-export function PublicHeader({ name, accent }: { name: string; accent: string }) {
+export function PublicHeader({ name, accent, logoUrl }: { name: string; accent: string; logoUrl: string | null }) {
   return (
     <>
       <AccentStyle accent={accent} />
       <header className="mb-10 flex items-center gap-3">
-        <WorkspaceTile name={name} className="size-9 text-base" />
+        <WorkspaceTile name={name} logoUrl={logoUrl} className="size-9 text-base" />
         <span className="font-heading text-lg font-semibold tracking-tight">{name}</span>
       </header>
     </>

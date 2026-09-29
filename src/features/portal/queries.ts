@@ -1,5 +1,6 @@
 import "server-only";
 import { cache } from "react";
+import { workspaceLogoUrl } from "@/features/workspaces/constants";
 import { todayIn } from "@/lib/dates";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Enums } from "@/types/database";
@@ -58,7 +59,7 @@ export const getPortal = cache(async (token: string) => {
 
   const [{ data: client }, { data: workspace }, { data: owner }, { data: projects }, { data: thread }] = await Promise.all([
     admin.from("clients").select("id, company, contact_name").eq("id", portal.client_id).maybeSingle(),
-    admin.from("workspaces").select("name, default_accent").eq("id", portal.workspace_id).maybeSingle(),
+    admin.from("workspaces").select("*").eq("id", portal.workspace_id).maybeSingle(),
     admin
       .from("workspace_members")
       .select("profile:profiles!workspace_members_user_id_fkey(timezone)")
@@ -129,7 +130,7 @@ export const getPortal = cache(async (token: string) => {
 
   return {
     token,
-    workspace: { name: workspace.name, accent: workspace.default_accent },
+    workspace: { name: workspace.name, accent: workspace.default_accent, logoUrl: workspaceLogoUrl(workspace.logo_path) },
     client: { name: clientName, contactName: client.contact_name },
     projects: (projects ?? []).map<PortalProject>((p) => {
       const mine = portalTasks.filter((t) => t.projectId === p.id);

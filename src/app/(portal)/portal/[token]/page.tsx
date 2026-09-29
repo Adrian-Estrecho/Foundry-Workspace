@@ -66,7 +66,7 @@ export default async function PortalPage(props: PageProps<"/portal/[token]">) {
 
       <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <WorkspaceTile name={portal.workspace.name} className="size-9 text-base" />
+          <WorkspaceTile name={portal.workspace.name} logoUrl={portal.workspace.logoUrl} className="size-9 text-base" />
           <span className="font-heading text-lg font-semibold tracking-tight">{portal.workspace.name}</span>
         </div>
         <span className="rounded-full bg-muted px-3 py-1 text-sm text-muted-foreground">Project portal · {portal.client.name}</span>

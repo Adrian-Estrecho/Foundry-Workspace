@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
+import { ExternalLinkIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/panel";
+import { Button } from "@/components/ui/button";
+import { workspaceLogoUrl } from "@/features/workspaces/constants";
 import { requireAdmin } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
-import { HiringForm } from "./hiring-form";
-import { WorkspaceForm } from "./workspace-form";
+import { WorkspaceSettings } from "./settings-form";
 
 export const metadata: Metadata = { title: "Workspace" };
 
@@ -17,13 +19,24 @@ export default async function WorkspacePage() {
     .maybeSingle();
 
   return (
-    <div className="mx-auto grid max-w-5xl gap-5">
+    <div className="mx-auto max-w-5xl">
       <PageHeader
         title="Workspace"
-        description={`Options for everyone in ${user.workspace.name}. Owners and admins only.`}
+        description={`Brand, public links and onboarding for everyone in ${user.workspace.name}. Owners and admins only.`}
+        actions={
+          <Button asChild variant="outline">
+            <a href={`/apply/${user.workspace.slug}`} target="_blank" rel="noreferrer">
+              View application page <ExternalLinkIcon />
+            </a>
+          </Button>
+        }
       />
-      <WorkspaceForm workspace={user.workspace} siteUrl={env.siteUrl} />
-      <HiringForm template={template} />
+      <WorkspaceSettings
+        workspace={user.workspace}
+        template={template}
+        logoUrl={workspaceLogoUrl(user.workspace.logo_path)}
+        siteUrl={env.siteUrl}
+      />
     </div>
   );
 }

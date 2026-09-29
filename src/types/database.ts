@@ -2295,6 +2295,7 @@ export type Database = {
           default_accent: string;
           frameio_invite_url: string | null;
           id: string;
+          logo_path: string | null;
           missed_clock_in_grace_minutes: number;
           name: string;
           slug: string;
@@ -2309,6 +2310,7 @@ export type Database = {
           default_accent?: string;
           frameio_invite_url?: string | null;
           id?: string;
+          logo_path?: string | null;
           missed_clock_in_grace_minutes?: number;
           name: string;
           slug: string;
@@ -2323,6 +2325,7 @@ export type Database = {
           default_accent?: string;
           frameio_invite_url?: string | null;
           id?: string;
+          logo_path?: string | null;
           missed_clock_in_grace_minutes?: number;
           name?: string;
           slug?: string;
@@ -2533,6 +2536,7 @@ export type Database = {
         Returns: {
           accepting_applications: boolean;
           default_accent: string;
+          logo_path: string | null;
           name: string;
           workspace_id: string;
         }[];

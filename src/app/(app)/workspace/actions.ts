@@ -6,7 +6,7 @@ import { fail, fieldErrorsOf, optionalText, optionalUrl, type ActionResult as Re
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { HEX_PATTERN } from "@/lib/theme";
-import { SLUG_PATTERN } from "@/features/workspaces/constants";
+import { LOGO_BUCKET, LOGO_PATH, SLUG_PATTERN } from "@/features/workspaces/constants";
 
 const workspaceSchema = z.object({
   name: z.string().trim().min(2, "Give the workspace a name.").max(60, "Keep the name under 60 characters."),
@@ -46,7 +46,26 @@ export async function updateHiring(formData: FormData): Promise<Result> {
   return { ok: true };
 }
 
-/** Workspace → General (owners and admins). */
+/**
+ * Workspace → Brand: records a logo the browser already uploaded to
+ * workspace-logos, or clears it (null). The old file goes either way.
+ */
+export async function setWorkspaceLogo(path: string | null): Promise<Result> {
+  const user = await requireAdmin();
+  if (path !== null && !(LOGO_PATH.test(path) && path.startsWith(`${user.workspace.id}/`))) return fail("Invalid upload.");
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("workspaces").update({ logo_path: path }).eq("id", user.workspace.id);
+  if (error) return fail("Couldn't save the logo. Try again.");
+
+  const previous = user.workspace.logo_path;
+  if (previous && previous !== path) await supabase.storage.from(LOGO_BUCKET).remove([previous]);
+
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/** Workspace settings (owners and admins). */
 export async function updateWorkspace(formData: FormData): Promise<Result> {
   const user = await requireAdmin();
   const parsed = workspaceSchema.safeParse(Object.fromEntries(formData));

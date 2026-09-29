@@ -29,7 +29,7 @@ export default async function ThanksPage(props: PageProps<"/thanks">) {
 
   return (
     <>
-      {branding && <PublicHeader name={branding.name} accent={branding.defaultAccent} />}
+      {branding && <PublicHeader name={branding.name} accent={branding.defaultAccent} logoUrl={branding.logoUrl} />}
       <section className="mx-auto max-w-lg rounded-xl border bg-card p-10 text-center">
         <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-success/15 text-success ring-1 ring-success/30">
           <CheckIcon className="size-7" />

@@ -17,19 +17,25 @@ import { cn } from "@/lib/utils";
 import { switchWorkspace } from "../actions";
 import { WORKSPACE_CHANNEL } from "../constants";
 
-export type SwitcherWorkspace = { id: string; name: string; label: string };
+export type SwitcherWorkspace = { id: string; name: string; label: string; logoUrl: string | null };
 
-/** The workspace's initial on an accent-tinted tile. */
-export function WorkspaceTile({ name, className }: { name: string; className?: string }) {
+/** The workspace's logo, or its initial on an accent-tinted tile. */
+export function WorkspaceTile({ name, logoUrl, className }: { name: string; logoUrl?: string | null; className?: string }) {
   return (
     <span
       aria-hidden="true"
       className={cn(
-        "grid size-7 shrink-0 place-items-center rounded-md bg-primary/15 font-heading text-sm font-semibold text-primary",
+        "grid size-7 shrink-0 place-items-center overflow-hidden rounded-md bg-primary/15 font-heading text-sm font-semibold text-primary",
+        logoUrl && "bg-surface ring-1 ring-border",
         className,
       )}
     >
-      {name.trim().charAt(0).toUpperCase() || "?"}
+      {logoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element -- storage URL, already small
+        <img src={logoUrl} alt="" className="size-full object-cover" />
+      ) : (
+        name.trim().charAt(0).toUpperCase() || "?"
+      )}
     </span>
   );
 }
@@ -69,7 +75,7 @@ export function WorkspaceSwitcher({
       )}
       aria-label={`Workspace: ${current.name}. Switch workspace`}
     >
-      <WorkspaceTile name={current.name} />
+      <WorkspaceTile name={current.name} logoUrl={current.logoUrl} />
       {expanded && (
         <>
           <span className="min-w-0 flex-1">
@@ -100,7 +106,7 @@ export function WorkspaceSwitcher({
         <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">Workspaces</DropdownMenuLabel>
         {workspaces.map((workspace) => (
           <DropdownMenuItem key={workspace.id} disabled={pending} onSelect={() => open(workspace.id)} className="gap-2.5">
-            <WorkspaceTile name={workspace.name} className="size-6 text-xs" />
+            <WorkspaceTile name={workspace.name} logoUrl={workspace.logoUrl} className="size-6 text-xs" />
             <span className="min-w-0 flex-1">
               <span className="block truncate">{workspace.name}</span>
               <span className="block truncate text-xs text-muted-foreground">{workspace.label}</span>

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowRightIcon } from "lucide-react";
 import { OpenWorkspaceButton } from "@/features/workspaces/components/open-workspace-button";
 import { WorkspaceTile } from "@/features/workspaces/components/workspace-switcher";
-import { memberLabel } from "@/features/workspaces/constants";
+import { memberLabel, workspaceLogoUrl } from "@/features/workspaces/constants";
 import { getCurrentUser, requireAccount } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { firstName } from "@/lib/utils";
@@ -40,7 +40,7 @@ export default async function WelcomePage(props: PageProps<"/welcome">) {
           </h2>
           {memberships.map((m) => (
             <OpenWorkspaceButton key={m.workspace.id} workspaceId={m.workspace.id}>
-              <WorkspaceTile name={m.workspace.name} />
+              <WorkspaceTile name={m.workspace.name} logoUrl={workspaceLogoUrl(m.workspace.logo_path)} />
               <span className="min-w-0 flex-1 text-left">
                 <span className="block truncate text-sm font-medium">{m.workspace.name}</span>
                 <span className="block text-xs text-muted-foreground">{memberLabel(m.role, m.status)}</span>

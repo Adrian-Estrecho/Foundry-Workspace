@@ -1,5 +1,6 @@
 import "server-only";
 import { cache } from "react";
+import { workspaceLogoUrl } from "@/features/workspaces/constants";
 import { createClient } from "@/lib/supabase/server";
 
 export type Branding = {
@@ -7,6 +8,7 @@ export type Branding = {
   name: string;
   defaultAccent: string;
   acceptingApplications: boolean;
+  logoUrl: string | null;
 };
 
 /**
@@ -24,6 +26,7 @@ export const getBranding = cache(async (slug: string): Promise<Branding | null> 
       name: data.name,
       defaultAccent: data.default_accent,
       acceptingApplications: data.accepting_applications,
+      logoUrl: workspaceLogoUrl(data.logo_path),
     };
   } catch {
     return null;

@@ -29,7 +29,7 @@ export default async function IntakePage(props: PageProps<"/intake/[slug]">) {
 
   return (
     <>
-      <PublicHeader name={branding.name} accent={branding.defaultAccent} />
+      <PublicHeader name={branding.name} accent={branding.defaultAccent} logoUrl={branding.logoUrl} />
       <div className="mb-8">
         <p className="text-sm font-medium text-primary">Work with {branding.name}</p>
         <h1 className="mt-2 font-heading text-4xl font-semibold tracking-tight text-balance">Start a project</h1>

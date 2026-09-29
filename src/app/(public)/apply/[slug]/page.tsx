@@ -29,7 +29,7 @@ export default async function ApplyPage(props: PageProps<"/apply/[slug]">) {
 
   return (
     <>
-      <PublicHeader name={branding.name} accent={branding.defaultAccent} />
+      <PublicHeader name={branding.name} accent={branding.defaultAccent} logoUrl={branding.logoUrl} />
       {branding.acceptingApplications ? (
         <>
           <div className="mb-8">
