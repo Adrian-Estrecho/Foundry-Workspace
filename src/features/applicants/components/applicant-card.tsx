@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ClockIcon, FilmIcon, UserCheckIcon } from "lucide-react";
+import { MailIcon, UserCheckIcon } from "lucide-react";
 import { daysBetween } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import type { PipelineApplicant } from "../queries";
@@ -57,17 +57,13 @@ export function ApplicantCard({
         {facts.length > 0 && <p className="mt-2 truncate text-xs text-muted-foreground tabular">{facts.join(" · ")}</p>}
 
         <p className="mt-2.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-          {applicant.editorId ? (
+          {applicant.column === "joined" ? (
             <span className="inline-flex items-center gap-1 text-success">
-              <UserCheckIcon className="size-3" /> Account created ·
+              <UserCheckIcon className="size-3" /> Onboarding ·
             </span>
-          ) : applicant.column === "test_submitted" && applicant.testSubmissionUrl ? (
+          ) : applicant.column === "invited" ? (
             <span className="inline-flex items-center gap-1 text-primary">
-              <FilmIcon className="size-3" /> Edit in ·
-            </span>
-          ) : applicant.column === "test_edit_sent" && applicant.testEditUrl ? (
-            <span className="inline-flex items-center gap-1">
-              <ClockIcon className="size-3" /> Waiting on test ·
+              <MailIcon className="size-3" /> Invitation out ·
             </span>
           ) : null}
           {applicant.column === "applied"

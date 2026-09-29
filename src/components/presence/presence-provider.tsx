@@ -4,11 +4,10 @@ import * as React from "react";
 import { createClient } from "@/lib/supabase/client";
 import { subscribeAsUser } from "@/lib/supabase/realtime";
 
-const CHANNEL = "presence:team";
 const HEARTBEAT_MS = 2 * 60 * 1000;
 
 type PresenceContextValue = {
-  /** User ids currently connected to Foundry. */
+  /** User ids currently connected to ReEdit. */
   onlineIds: ReadonlySet<string>;
   /** False until the first presence sync, so callers can fall back to last_seen_at. */
   ready: boolean;
@@ -17,12 +16,23 @@ type PresenceContextValue = {
 const PresenceContext = React.createContext<PresenceContextValue>({ onlineIds: new Set(), ready: false });
 
 /**
- * Marks the signed-in user as Online while Foundry is open, and tells
- * everyone who else is. Uses a private Realtime channel (policies in
- * 0003_rls.sql) plus a periodic `touch_presence()` so the server also knows
- * when someone was last seen.
+ * Marks the signed-in user as Online while ReEdit is open, and tells their
+ * workspace who else is. Uses the workspace's private Realtime channel,
+ * "presence:<workspace id>" (policies in 0009_workspace_access.sql), plus a
+ * periodic `touch_presence()` so the server also knows when someone was last
+ * seen. Candidates still onboarding don't join the channel.
  */
-export function PresenceProvider({ userId, children }: { userId: string; children: React.ReactNode }) {
+export function PresenceProvider({
+  userId,
+  workspaceId,
+  enabled,
+  children,
+}: {
+  userId: string;
+  workspaceId: string;
+  enabled: boolean;
+  children: React.ReactNode;
+}) {
   const [state, setState] = React.useState<PresenceContextValue>({ onlineIds: new Set([userId]), ready: false });
 
   React.useEffect(() => {
@@ -31,21 +41,23 @@ export function PresenceProvider({ userId, children }: { userId: string; childre
       if (document.visibilityState === "visible") void supabase.rpc("touch_presence");
     };
 
-    const unsubscribe = subscribeAsUser(
-      CHANNEL,
-      (channel) =>
-        channel.on("presence", { event: "sync" }, () => {
-          const ids = new Set(Object.keys(channel.presenceState()));
-          ids.add(userId);
-          setState({ onlineIds: ids, ready: true });
-        }),
-      {
-        config: { private: true, presence: { key: userId } },
-        onStatus: (status, channel) => {
-          if (status === "SUBSCRIBED") void channel.track({ online_at: new Date().toISOString() });
-        },
-      },
-    );
+    const unsubscribe = enabled
+      ? subscribeAsUser(
+          `presence:${workspaceId}`,
+          (channel) =>
+            channel.on("presence", { event: "sync" }, () => {
+              const ids = new Set(Object.keys(channel.presenceState()));
+              ids.add(userId);
+              setState({ onlineIds: ids, ready: true });
+            }),
+          {
+            config: { private: true, presence: { key: userId } },
+            onStatus: (status, channel) => {
+              if (status === "SUBSCRIBED") void channel.track({ online_at: new Date().toISOString() });
+            },
+          },
+        )
+      : () => {};
 
     touch();
     const interval = window.setInterval(touch, HEARTBEAT_MS);
@@ -56,7 +68,7 @@ export function PresenceProvider({ userId, children }: { userId: string; childre
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", touch);
     };
-  }, [userId]);
+  }, [userId, workspaceId, enabled]);
 
   return <PresenceContext.Provider value={state}>{children}</PresenceContext.Provider>;
 }

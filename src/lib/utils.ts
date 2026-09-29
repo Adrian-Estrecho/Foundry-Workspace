@@ -20,3 +20,12 @@ export function initials(name: string | null | undefined) {
 export function firstName(name: string | null | undefined) {
   return (name ?? "").trim().split(/\s+/)[0] || "there";
 }
+
+/**
+ * A one-to-one embed. PostgREST returns it as an object, but the generated
+ * types call it an array when the foreign key is composite (per-workspace
+ * rows), so accept both.
+ */
+export function one<T>(value: T | T[] | null | undefined): T | null {
+  return Array.isArray(value) ? (value[0] ?? null) : (value ?? null);
+}

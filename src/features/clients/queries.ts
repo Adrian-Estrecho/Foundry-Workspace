@@ -25,13 +25,14 @@ export type PipelineClient = {
 
 const displayName = (company: string | null, contact: string) => company?.trim() || contact;
 
-/** Active editors, for assigning to projects. */
+/** Active, approved editors, for assigning to projects. */
 export async function getEditorOptions(): Promise<EditorOption[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("editors")
-    .select("id, profile:profiles!editors_id_fkey(full_name, avatar_url)")
-    .eq("is_active", true);
+    .select("id, profile:profiles!editors_id_fkey(full_name, avatar_url), member:workspace_members!editors_member_fkey!inner(status)")
+    .eq("is_active", true)
+    .eq("member.status", "active");
   return (data ?? [])
     .map((e) => ({ id: e.id, name: e.profile?.full_name ?? "Editor", avatarUrl: e.profile?.avatar_url ?? null }))
     .sort((a, b) => a.name.localeCompare(b.name));

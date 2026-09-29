@@ -2,7 +2,7 @@ import type { Enums } from "@/types/database";
 
 /**
  * What the owner sees for an editor. Working / On break come from the
- * editor's own switch; Online / Offline come from presence (is Foundry open?).
+ * editor's own switch; Online / Offline come from presence (is ReEdit open?).
  */
 export type LiveStatus = "working" | "on_break" | "online" | "offline";
 

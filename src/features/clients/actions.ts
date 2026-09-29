@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { Constants } from "@/types/database";
 
@@ -120,7 +121,9 @@ export async function deleteClientRecord(id: string): Promise<ClientActionResult
   if (error) {
     return fail(error.code === "23503" ? "This client has projects. Delete or move those first." : error.message);
   }
-  if (client.contract_path) await supabase.storage.from("contracts").remove([client.contract_path]);
+  // The contract's storage policy needs the client to exist, so the cleanup
+  // runs as the service role, on the path this admin could read above.
+  if (client.contract_path) await createAdminClient().storage.from("contracts").remove([client.contract_path]);
   if (client.lead_id) await supabase.from("leads").delete().eq("id", client.lead_id);
 
   revalidateClient();

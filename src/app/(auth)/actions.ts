@@ -2,7 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
+import { isTimeZone } from "@/lib/action-result";
+import { homePath, requireAccount } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import { safeNextPath } from "@/lib/utils";
@@ -21,30 +22,78 @@ export async function signIn(_prev: FormState, formData: FormData): Promise<Form
   if (!parsed.success) return { error: "Enter your email and password.", email };
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email: parsed.data.email,
     password: parsed.data.password,
   });
   if (error) {
-    const message = error.code === "invalid_credentials" ? "Wrong email or password." : error.message;
+    const message =
+      error.code === "invalid_credentials"
+        ? "Wrong email or password."
+        : error.code === "email_not_confirmed"
+          ? "Confirm your email first: use the link we sent when you signed up."
+          : error.message;
     return { error: message, email };
   }
 
-  redirect(safeNextPath(parsed.data.next));
+  redirect(parsed.data.next ? safeNextPath(parsed.data.next) : await homePath(supabase, data.user.id));
+}
+
+const signUpSchema = z.object({
+  fullName: z.string().trim().min(1, "Enter your name.").max(120, "Keep your name under 120 characters."),
+  email: z.email("Enter a valid email address."),
+  password: z.string().min(8, "Use at least 8 characters."),
+  timezone: z.string().optional(),
+  next: z.string().optional(),
+});
+
+/**
+ * Creates an account. Supabase emails a confirmation link (see
+ * templates/confirmation.html) that signs them in and carries on to `next`,
+ * normally the welcome page, or /join when they followed an invitation.
+ * The answer is the same whether or not the email already has an account.
+ */
+export async function signUp(_prev: FormState, formData: FormData): Promise<FormState> {
+  const email = String(formData.get("email") ?? "");
+  const parsed = signUpSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the form.", email };
+
+  const next = safeNextPath(parsed.data.next, "/welcome");
+  const timezone = parsed.data.timezone && isTimeZone(parsed.data.timezone) ? parsed.data.timezone : "UTC";
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signUp({
+    email: parsed.data.email,
+    password: parsed.data.password,
+    options: {
+      emailRedirectTo: `${env.siteUrl}${next}`,
+      data: { full_name: parsed.data.fullName, timezone },
+    },
+  });
+  if (error) {
+    if (error.code === "weak_password") return { error: "Choose a stronger password.", email };
+    if (error.code === "over_email_send_rate_limit") return { error: "Too many sign-ups just now. Try again in a minute.", email };
+    return { error: error.message, email };
+  }
+
+  // Email confirmation off: they're signed in already.
+  if (data.session) redirect(next);
+  return { success: `Check your inbox: we sent a link to ${parsed.data.email} to confirm it's you.`, email };
 }
 
 /**
  * Sends the visitor to Google, which returns them to /auth/confirm with a
- * PKCE code. Sign-up is disabled, so only emails that already have a
- * Foundry account get in; anyone else lands back on /login with an error.
+ * PKCE code. A new Google account is created on the way; it lands on the
+ * welcome page to create or join a workspace.
  */
 export async function signInWithGoogle(formData: FormData) {
-  const next = safeNextPath(String(formData.get("next") ?? ""));
+  const requested = String(formData.get("next") ?? "");
+  // No destination: /auth/confirm picks their dashboard or the welcome page.
+  const next = requested ? `?next=${encodeURIComponent(safeNextPath(requested))}` : "";
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: `${env.siteUrl}/auth/confirm?next=${encodeURIComponent(next)}`,
+      redirectTo: `${env.siteUrl}/auth/confirm${next}`,
       queryParams: { prompt: "select_account" },
     },
   });
@@ -63,11 +112,11 @@ export async function requestPasswordReset(_prev: FormState, formData: FormData)
 
   const supabase = await createClient();
   await supabase.auth.resetPasswordForEmail(parsed.data, {
-    redirectTo: `${env.siteUrl}/auth/confirm?next=/welcome`,
+    redirectTo: `${env.siteUrl}/auth/confirm?next=/set-password`,
   });
 
   // Same answer whether or not the account exists (no account enumeration).
-  return { success: "If that email has a Foundry account, a reset link is on its way." };
+  return { success: "If that email has a ReEdit account, a reset link is on its way." };
 }
 
 const passwordSchema = z
@@ -78,9 +127,9 @@ const passwordSchema = z
   })
   .refine((value) => value.password === value.confirm, { message: "Passwords don't match.", path: ["confirm"] });
 
-/** Used after accepting an invite or opening a password reset link. */
+/** Used after opening a password reset link. */
 export async function setPassword(_prev: FormState, formData: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireAccount();
   const parsed = passwordSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the form." };
 
@@ -90,11 +139,6 @@ export async function setPassword(_prev: FormState, formData: FormData): Promise
 
   await supabase.from("profiles").update({ full_name: parsed.data.fullName }).eq("id", user.id);
 
-  redirect(user.role === "editor" && !(await hasFinishedOnboarding(user.id)) ? "/onboarding" : "/dashboard");
-}
-
-async function hasFinishedOnboarding(editorId: string) {
-  const supabase = await createClient();
-  const { data } = await supabase.from("editors").select("onboarding_completed_at").eq("id", editorId).maybeSingle();
-  return Boolean(data?.onboarding_completed_at);
+  // The dashboard sends people without a workspace on to the welcome page.
+  redirect("/dashboard");
 }

@@ -3,19 +3,13 @@ import { notFound } from "next/navigation";
 import type { CurrentUser } from "@/lib/auth";
 import { startOfWeek, todayIn } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/server";
+import { one } from "@/lib/utils";
 import type { Enums } from "@/types/database";
 
 /** "Online" before the first presence sync: seen within the last 3 minutes. */
 const RECENT_MS = 3 * 60 * 1000;
 const seenRecently = (lastSeenAt: string | null | undefined, now: number) =>
   Boolean(lastSeenAt && now - new Date(lastSeenAt).getTime() < RECENT_MS);
-
-/** Invited but hasn't accepted yet (no confirmed email). */
-async function pendingInvites() {
-  const supabase = await createClient();
-  const { data } = await supabase.rpc("team_accounts");
-  return new Set((data ?? []).filter((a) => a.invited_at && !a.confirmed_at).map((a) => a.id));
-}
 
 export type RosterEditor = {
   id: string;
@@ -28,12 +22,13 @@ export type RosterEditor = {
   hourlyRate: number | null;
   weeklyHours: number | null;
   isActive: boolean;
+  /** "onboarding" until approved; "rejected" when not taken on. */
+  memberStatus: Enums<"member_status">;
   workStatus: Enums<"work_status">;
   recentlySeen: boolean;
   secondsThisWeek: number;
-  /** Null once onboarding is finished. */
+  /** Progress while they're onboarding, null once approved. */
   onboarding: { done: number; total: number } | null;
-  invitePending: boolean;
 };
 
 export async function getRoster(user: CurrentUser) {
@@ -41,16 +36,16 @@ export async function getRoster(user: CurrentUser) {
   const today = todayIn(user.timezone);
   const now = Date.now();
 
-  const [{ data, error }, hours, pending, newApplicants] = await Promise.all([
+  const [{ data, error }, hours, newApplicants] = await Promise.all([
     supabase
       .from("editors")
       .select(
-        `id, software, specialties, hourly_rate, weekly_hours, is_active, work_status, onboarding_completed_at,
+        `id, software, specialties, hourly_rate, weekly_hours, is_active, work_status,
          profile:profiles!editors_id_fkey(full_name, email, avatar_url, timezone, last_seen_at),
+         member:workspace_members!editors_member_fkey(status),
          checklist:editor_checklist_items(is_done)`,
       ),
     supabase.rpc("editor_hours", { p_from: startOfWeek(today), p_to: today, p_tz: user.timezone }),
-    pendingInvites(),
     supabase.from("applicants").select("id", { count: "exact", head: true }).eq("stage", "applied"),
   ]);
   if (error) throw error;
@@ -58,6 +53,7 @@ export async function getRoster(user: CurrentUser) {
   const secondsBy = new Map((hours.data ?? []).map((row) => [row.editor_id, Number(row.seconds)]));
   const editors: RosterEditor[] = (data ?? [])
     .map((e) => ({
+      memberStatus: one(e.member)?.status ?? "active",
       id: e.id,
       name: e.profile?.full_name ?? "Editor",
       email: e.profile?.email ?? "",
@@ -71,10 +67,10 @@ export async function getRoster(user: CurrentUser) {
       workStatus: e.work_status,
       recentlySeen: seenRecently(e.profile?.last_seen_at, now),
       secondsThisWeek: secondsBy.get(e.id) ?? 0,
-      onboarding: e.onboarding_completed_at
-        ? null
-        : { done: e.checklist.filter((i) => i.is_done).length, total: e.checklist.length },
-      invitePending: pending.has(e.id),
+      onboarding:
+        one(e.member)?.status === "onboarding"
+          ? { done: e.checklist.filter((i) => i.is_done).length, total: e.checklist.length }
+          : null,
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -85,7 +81,7 @@ export async function getEditorProfile(id: string, user: CurrentUser) {
   const supabase = await createClient();
   const today = todayIn(user.timezone);
 
-  const [{ data: editor }, { data: tasks }, { data: shifts }, hours, pending, { data: activity }] = await Promise.all([
+  const [{ data: editor }, { data: tasks }, { data: shifts }, hours, { data: interviews }, { data: notes }, { data: activity }] = await Promise.all([
     supabase
       .from("editors")
       .select(
@@ -94,7 +90,8 @@ export async function getEditorProfile(id: string, user: CurrentUser) {
          checklist:editor_checklist_items(*),
          documents:editor_documents(*),
          payment:editor_payment_details(method, details, updated_at),
-         applicant:applicants!editors_applicant_id_fkey(id, created_at, portfolio_url, rating)`,
+         applicant:applicants!editors_applicant_id_fkey(id, created_at, portfolio_url, rating),
+         member:workspace_members!editors_member_fkey(status, joined_at, approved_at)`,
       )
       .eq("id", id)
       .maybeSingle(),
@@ -115,7 +112,12 @@ export async function getEditorProfile(id: string, user: CurrentUser) {
       .order("clock_in_at", { ascending: false })
       .limit(8),
     supabase.rpc("editor_hours", { p_from: startOfWeek(today), p_to: today, p_tz: user.timezone }),
-    pendingInvites(),
+    supabase
+      .from("editor_interviews")
+      .select("id, scheduled_at, duration_minutes, meeting_url, note_to_editor, outcome, decided_at")
+      .eq("editor_id", id)
+      .order("scheduled_at", { ascending: false }),
+    supabase.from("editor_notes").select("body, updated_at").eq("editor_id", id).maybeSingle(),
     supabase
       .from("activity_log")
       .select("id, summary, created_at, actor:profiles(full_name, avatar_url)")
@@ -146,7 +148,7 @@ export async function getEditorProfile(id: string, user: CurrentUser) {
     profile: editor.profile,
     checklist: [...editor.checklist].sort((a, b) => a.position - b.position),
     documents,
-    payment: editor.payment,
+    payment: one(editor.payment),
     trialTasks: allTasks
       .filter((t) => t.is_trial)
       .map((t) => ({
@@ -164,7 +166,9 @@ export async function getEditorProfile(id: string, user: CurrentUser) {
     },
     secondsThisWeek: Number((hours.data ?? []).find((row) => row.editor_id === id)?.seconds ?? 0),
     shifts: shifts ?? [],
-    invitePending: pending.has(id),
+    member: one(editor.member),
+    interviews: interviews ?? [],
+    notes: notes ?? null,
     activity: activity ?? [],
     today,
     renderedAt: Date.now(),
@@ -173,13 +177,13 @@ export async function getEditorProfile(id: string, user: CurrentUser) {
 
 export async function getOnboarding(user: CurrentUser) {
   const supabase = await createClient();
-  const [{ data: editor }, { data: checklist }, { data: documents }, { data: payment }, { data: settings }, { data: sops }, { data: trials }] =
+  const settings = user.workspace;
+  const [{ data: editor }, { data: checklist }, { data: documents }, { data: payment }, { data: sops }, { data: trials }, { data: interviews }] =
     await Promise.all([
       supabase.from("editors").select("onboarding_completed_at").eq("id", user.id).maybeSingle(),
       supabase.from("editor_checklist_items").select("*").eq("editor_id", user.id).order("position"),
       supabase.from("editor_documents").select("*").eq("editor_id", user.id).order("uploaded_at", { ascending: false }),
       supabase.from("editor_payment_details").select("method, details, updated_at").eq("editor_id", user.id).maybeSingle(),
-      supabase.from("app_settings").select("asset_pack_url, frameio_invite_url, contract_template_url").eq("id", 1).maybeSingle(),
       supabase
         .from("sops")
         .select("id, title, category, content, acknowledgments:sop_acknowledgments(acknowledged_at)")
@@ -196,6 +200,12 @@ export async function getOnboarding(user: CurrentUser) {
         .eq("assignee_id", user.id)
         .eq("is_trial", true)
         .order("created_at", { ascending: false }),
+      supabase
+        .from("editor_interviews")
+        .select("id, scheduled_at, duration_minutes, meeting_url, note_to_editor, outcome")
+        .eq("editor_id", user.id)
+        .neq("outcome", "cancelled")
+        .order("scheduled_at", { ascending: false }),
     ]);
 
   const docs = await Promise.all(
@@ -211,9 +221,9 @@ export async function getOnboarding(user: CurrentUser) {
     documents: docs,
     payment,
     links: {
-      assetPack: settings?.asset_pack_url ?? null,
-      frameio: settings?.frameio_invite_url ?? null,
-      contractTemplates: settings?.contract_template_url ?? null,
+      assetPack: settings.asset_pack_url,
+      frameio: settings.frameio_invite_url,
+      contractTemplates: settings.contract_template_url,
     },
     // RLS only returns the editor's own acknowledgments.
     sops: (sops ?? []).map((sop) => ({
@@ -228,6 +238,8 @@ export async function getOnboarding(user: CurrentUser) {
       attachments: [...t.attachments].sort((a, b) => b.created_at.localeCompare(a.created_at)),
       comments: [...t.comments].sort((a, b) => a.created_at.localeCompare(b.created_at)),
     })),
+    /** The latest interview that isn't cancelled. */
+    interview: interviews?.[0] ?? null,
     renderedAt: Date.now(),
   };
 }

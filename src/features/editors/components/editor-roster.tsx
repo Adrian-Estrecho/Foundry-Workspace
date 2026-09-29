@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { LinkIcon, MailIcon, SearchIcon, UserPlusIcon, UsersIcon } from "lucide-react";
+import { LinkIcon, SearchIcon, UserPlusIcon, UsersIcon } from "lucide-react";
 import { usePresence } from "@/components/presence/presence-provider";
 import { EmptyState } from "@/components/shared/panel";
 import { Segmented } from "@/components/shared/segmented";
@@ -14,6 +14,8 @@ import { Input } from "@/components/ui/input";
 import { toHours } from "@/lib/dates";
 import { liveStatus } from "@/lib/status";
 import { localTime, zoneCity } from "@/lib/time-zones";
+import { InvitationCard } from "@/features/invitations/components/invitation-card";
+import type { InvitationRow } from "@/features/invitations/queries";
 import { cn } from "@/lib/utils";
 import type { RosterEditor } from "../queries";
 import { InviteEditorDialog } from "./invite-editor-dialog";
@@ -21,22 +23,24 @@ import { InviteEditorDialog } from "./invite-editor-dialog";
 type Filter = "active" | "onboarding" | "inactive" | "all";
 
 const matches: Record<Filter, (e: RosterEditor) => boolean> = {
-  active: (e) => e.isActive,
-  onboarding: (e) => e.isActive && e.onboarding !== null,
-  inactive: (e) => !e.isActive,
+  active: (e) => e.memberStatus === "active" && e.isActive,
+  onboarding: (e) => e.memberStatus === "onboarding",
+  inactive: (e) => e.memberStatus === "active" && !e.isActive,
   all: () => true,
 };
 
 export function EditorRoster({
   editors,
+  invitations,
+  applyUrl,
   renderedAt,
-  timeZones,
-  defaultTimeZone,
 }: {
   editors: RosterEditor[];
+  /** Invitations nobody has used yet. */
+  invitations: InvitationRow[];
+  /** This workspace's public application link. */
+  applyUrl: string;
   renderedAt: number;
-  timeZones: string[];
-  defaultTimeZone: string;
 }) {
   const { onlineIds, ready } = usePresence();
   const [filter, setFilter] = React.useState<Filter>("active");
@@ -53,7 +57,7 @@ export function EditorRoster({
 
   const copyApplyLink = async () => {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/apply`);
+      await navigator.clipboard.writeText(applyUrl);
       toast.success("Application form link copied");
     } catch {
       toast.error("Couldn't copy the link.");
@@ -93,6 +97,19 @@ export function EditorRoster({
           </Button>
         </div>
       </div>
+
+      {invitations.length > 0 && (
+        <section className="mb-5 grid gap-2 rounded-xl border bg-card p-4" aria-labelledby="open-invitations">
+          <h2 id="open-invitations" className="text-sm font-medium">
+            Invitations waiting <span className="text-muted-foreground tabular">{invitations.length}</span>
+          </h2>
+          <div className="grid grid-cols-1 gap-2">
+            {invitations.map((invitation) => (
+              <InvitationCard key={invitation.id} invitation={invitation} showName />
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="overflow-hidden rounded-xl border bg-card">
         {visible.length === 0 ? (
@@ -137,11 +154,6 @@ export function EditorRoster({
                           </Link>
                           <span className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
                             <span className="truncate">{editor.email}</span>
-                            {editor.invitePending && (
-                              <span className="inline-flex items-center gap-1 text-warning">
-                                <MailIcon className="size-3" /> Invite pending
-                              </span>
-                            )}
                           </span>
                           {editor.onboarding && (
                             <span className="mt-1 flex max-w-44 items-center gap-2 text-xs text-muted-foreground">
@@ -160,7 +172,11 @@ export function EditorRoster({
                       </div>
                     </td>
                     <td className="hidden px-4 py-3 md:table-cell">
-                      {editor.isActive ? (
+                      {editor.memberStatus === "onboarding" ? (
+                        <span className="rounded-full bg-primary/12 px-2.5 py-1 text-xs font-medium text-primary">Onboarding</span>
+                      ) : editor.memberStatus !== "active" ? (
+                        <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">Not taken on</span>
+                      ) : editor.isActive ? (
                         <StatusChip status={status} />
                       ) : (
                         <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">Inactive</span>
@@ -203,7 +219,7 @@ export function EditorRoster({
         )}
       </div>
 
-      <InviteEditorDialog open={inviteOpen} onOpenChange={setInviteOpen} timeZones={timeZones} defaultTimeZone={defaultTimeZone} />
+      <InviteEditorDialog open={inviteOpen} onOpenChange={setInviteOpen} />
     </>
   );
 }

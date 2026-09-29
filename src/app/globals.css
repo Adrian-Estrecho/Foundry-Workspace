@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /* =============================================================================
-   Foundry design tokens
+   ReEdit design tokens
 
    Flat, quiet UI: solid neutral surfaces, hairline borders, no blur or glow,
    and one adjustable accent. The accent arrives as --brand-* variables (see
@@ -60,7 +60,7 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  /* Foundry additions */
+  /* ReEdit additions */
   --color-surface: var(--surface);
   --color-surface-strong: var(--surface-strong);
   --color-success: var(--success);
@@ -78,6 +78,14 @@
   --radius-2xl: calc(var(--radius) * 1.5);
   --radius-3xl: calc(var(--radius) * 1.75);
   --radius-4xl: calc(var(--radius) * 2.25);
+
+  /* The auth pages' timeline: scrolls one loop (--timeline-loop) sideways. */
+  --animate-timeline: timeline 120s linear infinite;
+  @keyframes timeline {
+    to {
+      transform: translateX(calc(-1 * var(--timeline-loop)));
+    }
+  }
 }
 
 /* Accent defaults (Ember). Overridden per user by <AccentStyle>. */

@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { BUDGET_RANGES, PROJECT_TYPES } from "@/features/clients/constants";
 import { submitIntake, type IntakeState } from "./actions";
 
-export function IntakeForm({ token }: { token: string }) {
+export function IntakeForm({ slug, token }: { slug: string; token: string }) {
   const [state, action, pending] = useActionState<IntakeState, FormData>(submitIntake, undefined);
   const errors = state?.fieldErrors ?? {};
   const value = (name: string) => state?.values?.[name] ?? "";
@@ -18,6 +18,7 @@ export function IntakeForm({ token }: { token: string }) {
 
   return (
     <form key={formKey} action={action} className="grid gap-6 rounded-xl border bg-card p-6 sm:p-8" noValidate>
+      <input type="hidden" name="slug" value={slug} />
       <input type="hidden" name="token" value={token} />
       {/* Honeypot: invisible to people, tempting to bots. */}
       <div aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 overflow-hidden">

@@ -29,28 +29,26 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { deleteApplicant, moveApplicant, setApplicantStage } from "../actions";
-import { APPLICANT_STAGES, applicantStageLabel, type ApplicantStage } from "../constants";
+import { APPLICANT_STAGES, applicantStageLabel, isDecisionStage, JOINED_MESSAGE, type ApplicantStage } from "../constants";
 import type { PipelineApplicant } from "../queries";
 import { ApplicantCard } from "./applicant-card";
 import { DecisionDialog, type Decision } from "./decision-dialog";
-import { SendTestDialog } from "./send-test-dialog";
 
 const COLUMNS = APPLICANT_STAGES.map((stage) => ({ id: stage.value, label: stage.label, dot: stage.dot }));
-const isDecision = (stage: ApplicantStage): stage is Decision["stage"] => stage === "approved" || stage === "rejected";
 
 export function ApplicantPipeline({
   applicants,
-  lastTestEditUrl,
+  applyUrl,
   today,
 }: {
   applicants: PipelineApplicant[];
-  lastTestEditUrl: string | null;
+  /** This workspace's public application link. */
+  applyUrl: string;
   today: string;
 }) {
   const router = useRouter();
   const [query, setQuery] = React.useState("");
   const [decision, setDecision] = React.useState<(Decision & { resolve?: (ok: boolean) => void }) | null>(null);
-  const [testFor, setTestFor] = React.useState<{ applicant: PipelineApplicant; prompted: boolean } | null>(null);
   const [toDelete, setToDelete] = React.useState<PipelineApplicant | null>(null);
   const [deleting, startDelete] = React.useTransition();
 
@@ -65,24 +63,25 @@ export function ApplicantPipeline({
   const decide = (applicant: PipelineApplicant, stage: Decision["stage"], position?: number) =>
     new Promise<boolean>((resolve) =>
       setDecision({
-        applicant: { id: applicant.id, name: applicant.name, email: applicant.email, editorId: applicant.editorId },
+        applicant: { id: applicant.id, name: applicant.name, email: applicant.email },
         stage,
         position,
         resolve,
       }),
     );
 
-  /** After a plain stage change: confirm, and offer to send the test at Test Edit Sent. */
-  const afterStageChange = (applicant: PipelineApplicant, stage: ApplicantStage) => {
+  const afterStageChange = (applicant: PipelineApplicant, stage: ApplicantStage) =>
     toast.success(`${applicant.name} moved to ${applicantStageLabel(stage)}`);
-    if (stage === "test_edit_sent" && !applicant.testEditUrl) setTestFor({ applicant, prompted: true });
-  };
 
-  // Dropping on Approved or Rejected waits for the confirmation; cancelling
-  // puts the card back.
+  // Dropping on Invited or Rejected waits for the confirmation; cancelling
+  // puts the card back. Joined only happens when they accept.
   const onMove = async (applicant: PipelineApplicant, column: string, position: number) => {
     const stage = column as ApplicantStage;
-    if (isDecision(stage) && stage !== applicant.column) return decide(applicant, stage, position);
+    if (stage !== applicant.column && (stage === "joined" || applicant.column === "joined")) {
+      toast.error(JOINED_MESSAGE);
+      return false;
+    }
+    if (isDecisionStage(stage) && stage !== applicant.column) return decide(applicant, stage, position);
 
     const result = await moveApplicant(applicant.id, stage, position);
     if (!result.ok) {
@@ -94,7 +93,7 @@ export function ApplicantPipeline({
   };
 
   const moveTo = async (applicant: PipelineApplicant, stage: ApplicantStage) => {
-    if (isDecision(stage)) return void decide(applicant, stage);
+    if (isDecisionStage(stage)) return void decide(applicant, stage);
     const result = await setApplicantStage(applicant.id, stage);
     if (!result.ok) return void toast.error(result.error);
     afterStageChange(applicant, stage);
@@ -103,7 +102,7 @@ export function ApplicantPipeline({
 
   const copyApplyLink = async () => {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/apply`);
+      await navigator.clipboard.writeText(applyUrl);
       toast.success("Application form link copied");
     } catch {
       toast.error("Couldn't copy the link.");
@@ -172,21 +171,25 @@ export function ApplicantPipeline({
                         <ExternalLinkIcon /> Open applicant
                       </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setTestFor({ applicant, prompted: false })}>
-                      <SendIcon /> {applicant.testEditUrl ? "Resend test edit" : "Send test edit"}
-                    </DropdownMenuItem>
-                    <DropdownMenuSub>
-                      <DropdownMenuSubTrigger>
-                        <ArrowRightIcon /> Move to
-                      </DropdownMenuSubTrigger>
-                      <DropdownMenuSubContent className="rounded-2xl">
-                        {APPLICANT_STAGES.filter((s) => s.value !== applicant.column).map((stage) => (
-                          <DropdownMenuItem key={stage.value} onSelect={() => void moveTo(applicant, stage.value)}>
-                            <span className={`size-2 rounded-full ${stage.dot}`} /> {stage.label}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuSubContent>
-                    </DropdownMenuSub>
+                    {(applicant.column === "applied" || applicant.column === "shortlisted") && (
+                      <DropdownMenuItem onSelect={() => void decide(applicant, "invited")}>
+                        <SendIcon /> Invite to join
+                      </DropdownMenuItem>
+                    )}
+                    {applicant.column !== "joined" && (
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger>
+                          <ArrowRightIcon /> Move to
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent className="rounded-2xl">
+                          {APPLICANT_STAGES.filter((s) => s.value !== applicant.column && s.value !== "joined").map((stage) => (
+                            <DropdownMenuItem key={stage.value} onSelect={() => void moveTo(applicant, stage.value)}>
+                              <span className={`size-2 rounded-full ${stage.dot}`} /> {stage.label}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
+                    )}
                     <DropdownMenuSeparator />
                     <DropdownMenuItem variant="destructive" onSelect={() => setToDelete(applicant)}>
                       <Trash2Icon /> Delete
@@ -207,33 +210,13 @@ export function ApplicantPipeline({
         }}
       />
 
-      {testFor && (
-        <SendTestDialog
-          open
-          onOpenChange={(open) => !open && setTestFor(null)}
-          applicant={{
-            id: testFor.applicant.id,
-            name: testFor.applicant.name,
-            email: testFor.applicant.email,
-            testEditUrl: testFor.applicant.testEditUrl,
-          }}
-          defaultUrl={lastTestEditUrl}
-          title={testFor.prompted ? `Send ${testFor.applicant.name} the test edit?` : undefined}
-          description={
-            testFor.prompted
-              ? "They're at Test Edit Sent. Email them the brief now, with a personal link to send their edit back."
-              : undefined
-          }
-        />
-      )}
-
       <AlertDialog open={!!toDelete} onOpenChange={(open) => !open && setToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {toDelete?.name}&apos;s application?</AlertDialogTitle>
             <AlertDialogDescription>
               This removes the application, notes and rating. It can&apos;t be undone.
-              {toDelete?.editorId && " Their editor account stays."}
+              {toDelete?.editorId && " They stay on your team as an editor."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

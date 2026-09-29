@@ -23,6 +23,7 @@ import { ProjectTasks } from "@/features/projects/components/project-tasks";
 import { RECENT_DONE_DAYS } from "@/features/tasks/constants";
 import { getClientChoices, getProjectDetail } from "@/features/projects/queries";
 import { requireUser } from "@/lib/auth";
+import { env } from "@/lib/env";
 import { formatDay, formatDuration, relativeDue } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
@@ -45,6 +46,9 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
   const isAdmin = user.role === "admin";
   const [data, clients] = await Promise.all([getProjectDetail(id, user), isAdmin ? getClientChoices() : Promise.resolve([])]);
   const { project, client, team, tasks, today, renderedAt } = data;
+  const portal = isAdmin
+    ? (await (await createClient()).from("client_portals").select("token, enabled, last_viewed_at").eq("client_id", project.client_id).maybeSingle()).data
+    : null;
 
   const open = tasks.filter((t) => t.status !== "done");
   const overdue = open.filter((t) => t.dueDate && t.dueDate < today).length;
@@ -80,6 +84,8 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
         taskCount={tasks.length}
         clients={clients}
         editors={data.editorOptions}
+        portal={portal ? { token: portal.token, enabled: portal.enabled, lastViewedAt: portal.last_viewed_at } : null}
+        siteUrl={env.siteUrl}
       />
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">

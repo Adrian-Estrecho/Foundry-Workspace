@@ -1,10 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { isAuthApiError } from "@supabase/supabase-js";
 import { env } from "@/lib/env";
+import { safeNextPath } from "@/lib/utils";
 import type { Database } from "@/types/database";
 
 /** Paths reachable without signing in. */
-const PUBLIC_PATHS = ["/login", "/forgot-password", "/auth", "/intake", "/apply", "/thanks"];
+// /portal is a client's private link; /api/jobs checks its own shared secret.
+const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth", "/intake", "/apply", "/thanks", "/portal", "/api/jobs"];
 
 const isPublicPath = (path: string) =>
   PUBLIC_PATHS.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
@@ -39,9 +42,7 @@ export async function updateSession(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
   const redirectTo = (path: string) => {
-    const url = request.nextUrl.clone();
-    url.pathname = path;
-    url.search = "";
+    const url = new URL(path, request.nextUrl.origin);
     if (path === "/login" && pathname !== "/") url.searchParams.set("next", pathname + search);
     const redirect = NextResponse.redirect(url);
     // Carry over any refreshed session cookies.
@@ -55,7 +56,19 @@ export async function updateSession(request: NextRequest) {
   if (request.headers.has("next-action")) return response;
 
   if (!signedIn && !isPublicPath(pathname)) return redirectTo("/login");
-  if (signedIn && (pathname === "/login" || pathname === "/")) return redirectTo("/dashboard");
+  // Already signed in: carry on to where they were going. (People without a
+  // workspace are sent on to /welcome by the app.)
+  if (signedIn && (pathname === "/login" || pathname === "/signup" || pathname === "/")) {
+    // A session can outlive its account (a deleted user, or a local db
+    // reset). The app sends those to /login, so check with Supabase Auth
+    // before sending them back, or the two redirect each other forever.
+    const { error } = await supabase.auth.getUser();
+    if (!error || !isAuthApiError(error)) {
+      return redirectTo(safeNextPath(request.nextUrl.searchParams.get("next")));
+    }
+    await supabase.auth.signOut({ scope: "local" });
+    if (pathname === "/") return redirectTo("/login");
+  }
 
   return response;
 }

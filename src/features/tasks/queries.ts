@@ -1,5 +1,6 @@
 import "server-only";
 import { notFound } from "next/navigation";
+import { workspaceAdmins } from "@/features/workspaces/queries";
 import type { CurrentUser } from "@/lib/auth";
 import { addDays, todayIn } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/server";
@@ -103,7 +104,11 @@ export async function getTaskFormOptions(): Promise<TaskFormOptions> {
   const supabase = await createClient();
   const [{ data: projects }, { data: editors }] = await Promise.all([
     supabase.from("projects").select("id, name, status, client_id, created_at").order("created_at", { ascending: false }),
-    supabase.from("editors").select("id, is_active, profile:profiles!editors_id_fkey(full_name, avatar_url)"),
+    // Approved editors only: people still onboarding can't be given work.
+    supabase
+      .from("editors")
+      .select("id, is_active, profile:profiles!editors_id_fkey(full_name, avatar_url), member:workspace_members!editors_member_fkey!inner(status)")
+      .eq("member.status", "active"),
   ]);
   const clients = await clientNames((projects ?? []).map((p) => p.client_id));
 
@@ -228,15 +233,15 @@ export async function getTaskDetail(id: string, user: CurrentUser) {
        creator:profiles!tasks_created_by_fkey(full_name),
        subtasks(*),
        attachments:task_attachments(*, adder:profiles(full_name)),
-       comments:task_comments(*, author:profiles(id, full_name, avatar_url, role))`,
+       comments:task_comments(*, author:profiles(id, full_name, avatar_url))`,
     )
     .eq("id", id)
     .maybeSingle();
   if (!task) notFound();
 
-  const [clients, { data: admins }, time, activity, options] = await Promise.all([
+  const [clients, admins, time, activity, options] = await Promise.all([
     clientNames([task.project?.client_id]),
-    supabase.from("profiles").select("id, full_name, avatar_url").eq("role", "admin"),
+    workspaceAdmins(supabase, user.workspace.id),
     supabase.rpc("task_time", { p_task_id: id }),
     admin
       ? supabase
@@ -277,9 +282,10 @@ export async function getTaskDetail(id: string, user: CurrentUser) {
 
   // Who can be @mentioned: people who can open this task.
   const people: Person[] = [
-    ...(admins ?? []).map((a) => ({ id: a.id, name: a.full_name, avatarUrl: a.avatar_url })),
-    ...(assignee && !(admins ?? []).some((a) => a.id === assignee.id) ? [assignee] : []),
+    ...admins.map((a) => ({ id: a.id, name: a.full_name, avatarUrl: a.avatar_url })),
+    ...(assignee && !admins.some((a) => a.id === assignee.id) ? [assignee] : []),
   ];
+  const adminIds = new Set(admins.map((a) => a.id));
 
   const names = new Map(people.map((p) => [p.id, p.name]));
   for (const comment of task.comments) if (comment.author) names.set(comment.author.id, comment.author.full_name);
@@ -306,7 +312,7 @@ export async function getTaskDetail(id: string, user: CurrentUser) {
         body: c.body,
         createdAt: c.created_at,
         mentions: c.mentions,
-        author: c.author ? { id: c.author.id, name: c.author.full_name, avatarUrl: c.author.avatar_url, isAdmin: c.author.role === "admin" } : null,
+        author: c.author ? { id: c.author.id, name: c.author.full_name, avatarUrl: c.author.avatar_url, isAdmin: adminIds.has(c.author.id) } : null,
       })),
     people,
     time: (time.data ?? [])

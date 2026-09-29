@@ -101,6 +101,35 @@ export function greeting(timeZone: string, now = new Date()) {
   return "Good evening";
 }
 
+/** "9:02 AM" in `timeZone`; with `withZone`, "9:02 AM EDT". */
+export function formatTime(iso: string, timeZone: string, withZone = false) {
+  const options: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit", timeZoneName: withZone ? "short" : undefined };
+  try {
+    return new Intl.DateTimeFormat("en-US", { ...options, timeZone }).format(new Date(iso));
+  } catch {
+    return new Intl.DateTimeFormat("en-US", { ...options, timeZone: "UTC" }).format(new Date(iso));
+  }
+}
+
+/** "09:00" (a time of day) → "9:00 AM" */
+export function formatTimeOfDay(time: string) {
+  const [h, m] = time.split(":").map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+}
+
+/** Minutes past midnight right now in `timeZone`. */
+export function minutesNow(timeZone: string, now: number = Date.now()) {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone, hour: "numeric", minute: "numeric", hourCycle: "h23" }).formatToParts(now);
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  return get("hour") * 60 + get("minute");
+}
+
+/** "09:30" → 570 */
+export function toMinutes(time: string) {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+}
+
 /** Monday (YYYY-MM-DD) of the week containing `date`. */
 export function startOfWeek(date: string) {
   const day = utcDate(date).getUTCDay(); // 0 = Sunday

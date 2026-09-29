@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeftIcon, CheckIcon, ChevronDownIcon, MoreHorizontalIcon, PencilIcon, Trash2Icon } from "lucide-react";
+import { ArrowLeftIcon, CheckIcon, ChevronDownIcon, GlobeIcon, MoreHorizontalIcon, PencilIcon, Trash2Icon } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,6 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ProjectPortalDialog, type PortalInfo } from "@/features/portal/components/portal-admin";
 import { cn } from "@/lib/utils";
 import { deleteProject, setProjectStatus } from "../actions";
 import { PROJECT_STATUSES, projectStatusMeta, type ProjectStatus } from "../constants";
@@ -37,6 +38,8 @@ export function ProjectHeader({
   taskCount,
   clients,
   editors,
+  portal = null,
+  siteUrl = "",
 }: {
   project: ProjectEditable;
   client: { id: string; name: string };
@@ -44,11 +47,15 @@ export function ProjectHeader({
   taskCount: number;
   clients: ClientChoice[];
   editors: EditorOption[];
+  /** The client's portal link (admins), for "Share with client". */
+  portal?: PortalInfo;
+  siteUrl?: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
   const [editOpen, setEditOpen] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const [shareOpen, setShareOpen] = React.useState(false);
   const current = projectStatusMeta(project.status);
 
   const changeStatus = (status: ProjectStatus) =>
@@ -120,6 +127,9 @@ export function ProjectHeader({
                 <DropdownMenuItem onSelect={() => setEditOpen(true)}>
                   <PencilIcon /> Edit project
                 </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setShareOpen(true)}>
+                  <GlobeIcon /> Share with client
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem variant="destructive" onSelect={() => setDeleteOpen(true)}>
                   <Trash2Icon /> Delete project
@@ -131,6 +141,17 @@ export function ProjectHeader({
           <ProjectStatusChip status={project.status} className="px-3 py-1 text-sm" />
         )}
       </div>
+
+      {isAdmin && (
+        <ProjectPortalDialog
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+          client={client}
+          projectId={project.id}
+          portal={portal}
+          siteUrl={siteUrl}
+        />
+      )}
 
       {isAdmin && editOpen && (
         <ProjectFormDialog open onOpenChange={setEditOpen} project={project} clients={clients} editors={editors} />

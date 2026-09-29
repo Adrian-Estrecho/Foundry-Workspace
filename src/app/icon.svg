@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- ReEdit's mark in the default accent (see components/brand/logo.tsx). -->
+  <rect x="4.75" y="7.25" width="19.5" height="17.5" rx="3.5" fill="#F2711C" fill-opacity="0.25" stroke="#F2711C" stroke-width="1.5"/>
+  <rect x="2.75" y="5.25" width="4" height="4" rx="1" fill="#fff" stroke="#F2711C" stroke-width="1.5"/>
+  <rect x="22.25" y="5.25" width="4" height="4" rx="1" fill="#fff" stroke="#F2711C" stroke-width="1.5"/>
+  <rect x="2.75" y="22.75" width="4" height="4" rx="1" fill="#fff" stroke="#F2711C" stroke-width="1.5"/>
+  <path d="M19 16.5v12l2.88-2.72 2.08 4.64 2.16-.96-2.08-4.48h3.92Z" fill="#1c1917" stroke="#fff" stroke-width="3" stroke-linejoin="round" paint-order="stroke"/>
+</svg>

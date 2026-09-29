@@ -7,9 +7,12 @@ import { requireUser, type CurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { DOC_TYPES, PAYMENT_METHODS, SELF_REPORTED_STEPS, isPaymentMethod } from "./constants";
 
-/** Onboarding actions are for editors, acting on their own records. */
+/**
+ * Onboarding actions are for editors, acting on their own records in their
+ * current workspace. Editors still onboarding may use them (that's the point).
+ */
 async function requireEditor(): Promise<CurrentUser> {
-  const user = await requireUser();
+  const user = await requireUser({ allowOnboarding: true });
   if (user.role !== "editor") throw new Error("Only editors have onboarding.");
   return user;
 }
@@ -17,11 +20,13 @@ async function requireEditor(): Promise<CurrentUser> {
 function revalidateOnboarding(editorId: string) {
   revalidatePath("/onboarding");
   revalidatePath("/dashboard");
+  revalidatePath("/sops");
   revalidatePath(`/editors/${editorId}`);
 }
 
 /**
- * Records a document the browser already uploaded to editor-docs/<id>/…
+ * Records a document the browser already uploaded to
+ * editor-docs/<workspace id>/<editor id>/…
  * (uploads go straight to storage so big PDFs skip the server). Replaces any
  * earlier document of the same type.
  */
@@ -30,7 +35,7 @@ export async function recordDocument(docType: string, path: string, fileName: st
   const parsed = z
     .object({
       docType: z.enum(DOC_TYPES.map((d) => d.value) as ["contract", "nda"]),
-      path: z.string().startsWith(`${user.id}/`).max(300),
+      path: z.string().startsWith(`${user.workspace.id}/${user.id}/`).max(300),
       fileName: z.string().trim().min(1).max(200),
     })
     .safeParse({ docType, path, fileName });
@@ -106,14 +111,17 @@ export async function savePaymentDetails(formData: FormData): Promise<ActionResu
   const supabase = await createClient();
   const { error } = await supabase
     .from("editor_payment_details")
-    .upsert({ editor_id: user.id, method, details, updated_at: new Date().toISOString() });
+    .upsert(
+      { workspace_id: user.workspace.id, editor_id: user.id, method, details, updated_at: new Date().toISOString() },
+      { onConflict: "workspace_id,editor_id" },
+    );
   if (error) return fail(error.message);
 
   revalidateOnboarding(user.id);
   return { ok: true };
 }
 
-/** Steps Foundry can't check for itself (joined Frame.io, downloaded the asset pack). */
+/** Steps ReEdit can't check for itself (joined Frame.io, downloaded the asset pack). */
 export async function setOnboardingStep(key: string, done: boolean): Promise<ActionResult> {
   const user = await requireEditor();
   if (!(SELF_REPORTED_STEPS as readonly string[]).includes(key)) return fail("This step completes itself.");
@@ -144,7 +152,7 @@ const submissionSchema = z.object({
   note: optionalText(4000),
 });
 
-/** Hands in the trial task: the link goes on the task and it moves to For Review. */
+/** Hands in the test edit (trial task): the link goes on the task and it moves to For Review. */
 export async function submitTrialTask(taskId: string, formData: FormData): Promise<ActionResult> {
   const user = await requireEditor();
   if (!z.uuid().safeParse(taskId).success) return fail("Invalid task.");
@@ -159,12 +167,12 @@ export async function submitTrialTask(taskId: string, formData: FormData): Promi
     .eq("assignee_id", user.id)
     .eq("is_trial", true)
     .maybeSingle();
-  if (!task) return fail("That trial task no longer exists.");
-  if (task.status === "done") return fail("This trial task is already approved.");
+  if (!task) return fail("That test edit no longer exists.");
+  if (task.status === "done") return fail("Your test edit has already passed.");
 
   const { error: linkError } = await supabase
     .from("task_attachments")
-    .insert({ task_id: taskId, kind: "link", url: parsed.data.url, label: "Trial submission", added_by: user.id });
+    .insert({ task_id: taskId, kind: "link", url: parsed.data.url, label: "Test edit submission", added_by: user.id });
   if (linkError) return fail(linkError.message);
 
   if (parsed.data.note) {

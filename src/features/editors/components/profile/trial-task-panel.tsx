@@ -35,15 +35,17 @@ export function TrialTaskPanel({
   return (
     <Panel
       id="trial"
-      title="Trial task"
+      title="Test edit & review"
       description={
         !task
-          ? "Their last onboarding step. Approving it ticks the step."
+          ? "A short, real task to see how they work. Passing it ticks the onboarding step."
           : task.status === "for_review"
             ? `${firstName(editorName)} handed it in. Your review is needed.`
             : task.status === "done"
-              ? "Approved."
-              : `Waiting for ${firstName(editorName)} to hand it in.`
+              ? "Passed."
+              : task.status === "revisions"
+                ? `Changes requested. Waiting for ${firstName(editorName)} to send a new version.`
+                : `Waiting for ${firstName(editorName)} to hand it in.`
       }
       action={task && <TaskMenu taskId={task.id} />}
     >
@@ -55,11 +57,11 @@ export function TrialTaskPanel({
       ) : (
         <EmptyState
           icon={ClipboardListIcon}
-          title="No trial task yet"
+          title="No test edit yet"
           description={`Give ${firstName(editorName)} a short task to see how they work.`}
           action={
             <Button onClick={() => setAssignOpen(true)}>
-              <PlusIcon /> Assign trial task
+              <PlusIcon /> Assign test edit
             </Button>
           }
         />
@@ -78,7 +80,7 @@ function ReviewForm({ taskId, editorName, highlighted }: { taskId: string; edito
     startTransition(async () => {
       const result = await reviewTrialTask(taskId, decision, feedback);
       if (!result.ok) return void toast.error(result.error);
-      toast.success(decision === "done" ? "Trial task approved" : "Changes requested", {
+      toast.success(decision === "done" ? "Test edit passed" : "Changes requested", {
         description: decision === "done" ? "The onboarding step is ticked." : `${firstName(editorName)} has been notified.`,
       });
       setFeedback("");
@@ -97,7 +99,7 @@ function ReviewForm({ taskId, editorName, highlighted }: { taskId: string; edito
       />
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => review("done")} disabled={pending}>
-          {pending ? <Loader2Icon className="animate-spin" /> : <CheckIcon />} Approve
+          {pending ? <Loader2Icon className="animate-spin" /> : <CheckIcon />} Pass
         </Button>
         <Button variant="outline" onClick={() => review("revisions")} disabled={pending || !feedback.trim()}>
           <RotateCcwIcon /> Request changes
@@ -112,20 +114,20 @@ function TaskMenu({ taskId }: { taskId: string }) {
   const remove = async () => {
     const result = await deleteTrialTask(taskId);
     if (!result.ok) return void toast.error(result.error);
-    toast.success("Trial task deleted");
+    toast.success("Test edit deleted");
     router.refresh();
   };
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="Trial task actions">
+        <Button variant="ghost" size="icon-sm" aria-label="Test edit actions">
           <MoreHorizontalIcon />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="rounded-2xl">
         <DropdownMenuItem variant="destructive" onSelect={() => void remove()}>
-          <Trash2Icon /> Delete trial task
+          <Trash2Icon /> Delete test edit
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -156,7 +158,7 @@ function AssignDialog({
         setErrors(result.fieldErrors ?? {});
         return void toast.error(result.error);
       }
-      toast.success("Trial task assigned", { description: `${firstName(editorName)} has been notified.` });
+      toast.success("Test edit assigned", { description: `${firstName(editorName)} has been notified.` });
       setErrors({});
       onOpenChange(false);
       router.refresh();
@@ -166,12 +168,12 @@ function AssignDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="text-xl">Assign a trial task</DialogTitle>
+          <DialogTitle className="text-xl">Assign a test edit</DialogTitle>
           <DialogDescription>It shows on {firstName(editorName)}&apos;s onboarding page. They hand it in with a link.</DialogDescription>
         </DialogHeader>
         <form onSubmit={submitWith(submit)} className="grid gap-4">
           <FormRow label="Title" required error={errors.title}>
-            <Input name="title" defaultValue="Trial task · 30s product teaser" autoFocus required aria-invalid={!!errors.title} />
+            <Input name="title" defaultValue="Test edit · 30s product teaser" autoFocus required aria-invalid={!!errors.title} />
           </FormRow>
           <FormRow label="Brief" hint="What to make, where the footage is, format and length." error={errors.description}>
             <Textarea name="description" rows={5} className="rounded-xl" placeholder="Use the sample footage in the asset pack…" />

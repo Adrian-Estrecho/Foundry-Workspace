@@ -5,10 +5,11 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { SOFTWARE_OPTIONS, SPECIALTY_OPTIONS } from "@/features/applicants/constants";
 import { isTimeZone } from "@/lib/action-result";
+import { getBranding } from "@/lib/branding";
 import { renderEmail, sendEmail } from "@/lib/email";
 import { env } from "@/lib/env";
 import { checkFormToken } from "@/lib/form-token";
-import { adminEmailContext } from "@/lib/notify";
+import { adminEmailContext, workspaceLink } from "@/lib/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type Values = Record<string, string | string[]>;
@@ -37,19 +38,22 @@ const schema = z.object({
 });
 
 /**
- * Public editor application. Same spam checks as the client intake
- * (honeypot + signed timing token, failures pretend to succeed). The
- * applicant card is created by `submit_application`, which also notifies
- * admins in-app; the admin email goes out after the response.
+ * Public editor application for one workspace (the slug in the link). Same
+ * spam checks as the client intake (honeypot + signed timing token bound to
+ * the workspace, failures pretend to succeed). The applicant card is created
+ * by `submit_application`, which also notifies the workspace's admins
+ * in-app; the admin email goes out after the response.
  */
 export async function submitApplication(_prev: ApplyState, formData: FormData): Promise<ApplyState> {
   const raw = Object.fromEntries(formData) as Record<string, string>;
   const multi = { software: formData.getAll("software").map(String), specialties: formData.getAll("specialties").map(String) };
   const values: Values = { ...raw, ...multi, website: "", token: "" };
+  const slug = String(raw.slug ?? "");
+  const thanks = `/thanks?form=apply&w=${encodeURIComponent(slug)}`;
 
-  const token = checkFormToken("apply", raw.token);
+  const token = checkFormToken(`apply:${slug}`, raw.token);
   if (raw.website || token === "invalid" || token === "too_fast") {
-    redirect("/thanks?form=apply");
+    redirect(thanks);
   }
   if (token === "expired") {
     return { error: "This page was open for a long time. Please refresh and send it again.", values };
@@ -65,9 +69,13 @@ export async function submitApplication(_prev: ApplyState, formData: FormData): 
     return { error: "Please check the highlighted fields.", fieldErrors, values };
   }
 
+  const branding = await getBranding(slug);
+  if (!branding) return { error: "This application link doesn't work anymore. Ask the team for a new one.", values };
+
   const application = parsed.data;
   const supabase = createAdminClient();
   const { data: applicantId, error } = await supabase.rpc("submit_application", {
+    p_workspace_id: branding.workspaceId,
     p_full_name: application.full_name,
     p_email: application.email,
     p_portfolio_url: application.portfolio_url,
@@ -83,6 +91,9 @@ export async function submitApplication(_prev: ApplyState, formData: FormData): 
     if (error.message.includes("duplicate")) {
       return { error: "We already have a recent application from this email. We'll be in touch!", values };
     }
+    if (error.message.includes("closed")) {
+      return { error: `${branding.name} isn't taking applications right now.`, values };
+    }
     if (error.message.includes("rate_limited")) {
       return { error: "We're getting a lot of applications right now. Please try again in a few minutes.", values };
     }
@@ -91,9 +102,10 @@ export async function submitApplication(_prev: ApplyState, formData: FormData): 
   }
 
   after(async () => {
-    const { recipients, accent } = await adminEmailContext();
+    const { recipients, accent, companyName } = await adminEmailContext(branding.workspaceId);
     const email = renderEmail({
       accent,
+      brand: companyName,
       heading: `New applicant: ${application.full_name}`,
       intro: "A new editor application just came in. It's waiting in Applied.",
       rows: [
@@ -107,10 +119,13 @@ export async function submitApplication(_prev: ApplyState, formData: FormData): 
         ["Hours per week", String(application.weekly_hours)],
         ["Availability", application.availability_notes],
       ],
-      cta: { label: "Review in Foundry", url: `${env.siteUrl}/editors/applicants/${applicantId}` },
+      cta: {
+        label: "Review in ReEdit",
+        url: workspaceLink(env.siteUrl, branding.workspaceId, `/editors/applicants/${applicantId}`),
+      },
     });
     await sendEmail({ to: recipients, subject: `New applicant: ${application.full_name}`, replyTo: application.email, ...email });
   });
 
-  redirect("/thanks?form=apply");
+  redirect(thanks);
 }

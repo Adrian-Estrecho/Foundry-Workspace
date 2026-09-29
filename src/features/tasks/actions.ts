@@ -2,8 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { workspaceAdmins } from "@/features/workspaces/queries";
 import { blankToNull, fail, fieldErrorsOf, optionalText, type ActionResult } from "@/lib/action-result";
 import { requireAdmin, requireUser } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { Constants } from "@/types/database";
 
@@ -122,8 +124,10 @@ export async function deleteTask(id: string): Promise<ActionResult> {
   if (error) return fail(dbError(error));
   if (!data) return fail("That task no longer exists.");
 
+  // Storage policies only reach files of tasks that still exist, so the
+  // cleanup runs as the service role, on paths this admin could read above.
   const paths = (files ?? []).map((f) => f.storage_path).filter((p): p is string => Boolean(p));
-  if (paths.length) await supabase.storage.from("task-files").remove(paths);
+  if (paths.length) await createAdminClient().storage.from("task-files").remove(paths);
 
   revalidateTask(id, data.project_id);
   return { ok: true };
@@ -412,12 +416,15 @@ export async function addComment(taskId: string, body: string): Promise<ActionRe
   const { data: task } = await supabase.from("tasks").select("assignee_id, project_id").eq("id", taskId).maybeSingle();
   if (!task) return fail("That task no longer exists.");
 
-  const { data: people } = await supabase
-    .from("profiles")
-    .select("id, full_name, role")
-    .or(`role.eq.admin${task.assignee_id ? `,id.eq.${task.assignee_id}` : ""}`);
+  const [admins, { data: assignee }] = await Promise.all([
+    workspaceAdmins(supabase, user.workspace.id),
+    task.assignee_id
+      ? supabase.from("profiles").select("id, full_name").eq("id", task.assignee_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  const people = assignee ? [...admins, assignee] : admins;
   const text = parsed.data.body.toLowerCase();
-  const mentions = (people ?? [])
+  const mentions = people
     .filter((p) => p.id !== user.id && p.full_name && text.includes(`@${p.full_name.toLowerCase()}`))
     .map((p) => p.id);
 

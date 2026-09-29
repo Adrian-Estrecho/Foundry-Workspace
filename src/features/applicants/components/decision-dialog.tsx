@@ -3,23 +3,26 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { CheckIcon, Loader2Icon, MailIcon, XIcon } from "lucide-react";
+import { Loader2Icon, MailIcon, SendIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { approveApplicant, rejectApplicant } from "../actions";
+import { inviteApplicant } from "@/features/invitations/actions";
+import { formatInviteCode } from "@/features/invitations/constants";
+import { rejectApplicant } from "../actions";
+import type { DecisionStage } from "../constants";
 
 export type Decision = {
-  applicant: { id: string; name: string; email: string; editorId: string | null };
-  stage: "approved" | "rejected";
+  applicant: { id: string; name: string; email: string };
+  stage: DecisionStage;
   /** Set when the card was dropped on the column. */
   position?: number;
 };
 
 /**
- * Confirms approving or rejecting an applicant. Approving creates their
- * account and emails the invite; rejecting can email a short note.
- * `onDone(true)` once saved, `onDone(false)` if cancelled or it failed.
+ * Confirms inviting or rejecting an applicant. Inviting emails them a code to
+ * join the workspace; rejecting can email a short note. `onDone(true)` once
+ * saved, `onDone(false)` if cancelled or it failed.
  */
 export function DecisionDialog({ decision, onDone }: { decision: Decision | null; onDone: (ok: boolean) => void }) {
   const router = useRouter();
@@ -33,23 +36,20 @@ export function DecisionDialog({ decision, onDone }: { decision: Decision | null
 
   if (!decision) return null;
   const { applicant, stage } = decision;
-  const approving = stage === "approved";
-  const hasAccount = Boolean(applicant.editorId);
+  const inviting = stage === "invited";
 
   const confirm = () =>
     startTransition(async () => {
-      if (approving) {
-        const result = await approveApplicant(applicant.id, decision.position);
+      if (inviting) {
+        const result = await inviteApplicant(applicant.id, decision.position);
         if (!result.ok) {
           toast.error(result.error);
           onDone(false);
           router.refresh();
           return;
         }
-        const editorId = result.data.editorId;
-        toast.success(result.data.invited ? `${applicant.name} approved. Invite sent.` : `${applicant.name} moved to Approved`, {
-          description: result.data.invited ? `Welcome email on its way to ${applicant.email}` : undefined,
-          action: { label: "Open profile", onClick: () => router.push(`/editors/${editorId}`) },
+        toast.success(`${applicant.name} invited`, {
+          description: `Code ${formatInviteCode(result.data.code)} is on its way to ${applicant.email}`,
         });
       } else {
         const result = await rejectApplicant(applicant.id, notify, decision.position);
@@ -68,19 +68,15 @@ export function DecisionDialog({ decision, onDone }: { decision: Decision | null
     <Dialog open onOpenChange={(open) => !open && !pending && onDone(false)}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-xl">
-            {approving ? `Approve ${applicant.name}?` : `Reject ${applicant.name}?`}
-          </DialogTitle>
+          <DialogTitle className="text-xl">{inviting ? `Invite ${applicant.name} to join?` : `Reject ${applicant.name}?`}</DialogTitle>
           <DialogDescription>
-            {approving
-              ? hasAccount
-                ? "They already have a Foundry account, so this just moves them to Approved."
-                : `This creates their Foundry account and emails a Welcome to Foundry invite to ${applicant.email}. They choose a password, then start onboarding.`
-              : "They move to Rejected. You can still move them back later."}
+            {inviting
+              ? `We'll email ${applicant.email} an invitation code. They sign up (or sign in), enter it, and start onboarding with limited access: setup steps, the test edit and an interview. You approve them at the end.`
+              : "They move to Rejected, and any invitation you sent stops working. You can still move them back later."}
           </DialogDescription>
         </DialogHeader>
 
-        {!approving && (
+        {!inviting && (
           <label className="flex cursor-pointer items-start gap-3 rounded-xl bg-surface p-3 ring-1 ring-border">
             <Checkbox checked={notify} onCheckedChange={(checked) => setNotify(checked === true)} className="mt-0.5" />
             <span className="text-sm">
@@ -98,9 +94,9 @@ export function DecisionDialog({ decision, onDone }: { decision: Decision | null
           <Button variant="ghost" onClick={() => onDone(false)} disabled={pending}>
             Cancel
           </Button>
-          <Button variant={approving ? "default" : "destructive"} onClick={confirm} disabled={pending}>
-            {pending ? <Loader2Icon className="animate-spin" /> : approving ? <CheckIcon /> : <XIcon />}
-            {approving ? (hasAccount ? "Approve" : "Approve & send invite") : "Reject"}
+          <Button variant={inviting ? "default" : "destructive"} onClick={confirm} disabled={pending}>
+            {pending ? <Loader2Icon className="animate-spin" /> : inviting ? <SendIcon /> : <XIcon />}
+            {inviting ? "Send invitation" : "Reject"}
           </Button>
         </DialogFooter>
       </DialogContent>

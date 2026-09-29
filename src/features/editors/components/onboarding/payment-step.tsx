@@ -81,7 +81,7 @@ export function PaymentStep({ payment }: { payment: { method: string; details: J
           )}
         </FormRow>
       ))}
-      <p className="text-xs text-muted-foreground sm:col-span-2">Only you and Foundry admins can see these details.</p>
+      <p className="text-xs text-muted-foreground sm:col-span-2">Only you and your workspace&apos;s admins can see these details.</p>
       <div className="flex gap-2 sm:col-span-2">
         <Button type="submit" disabled={pending}>
           {pending && <Loader2Icon className="animate-spin" />}

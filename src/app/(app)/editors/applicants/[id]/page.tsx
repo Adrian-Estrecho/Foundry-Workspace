@@ -7,7 +7,6 @@ import { RealtimeRefresh } from "@/components/shared/realtime-refresh";
 import { ApplicantHeader } from "@/features/applicants/components/detail/applicant-header";
 import { DecisionPanel } from "@/features/applicants/components/detail/decision-panel";
 import { ReviewPanel } from "@/features/applicants/components/detail/review-panel";
-import { TestEditPanel } from "@/features/applicants/components/detail/test-edit-panel";
 import { getApplicantDetail } from "@/features/applicants/queries";
 import { requireAdmin } from "@/lib/auth";
 import { timeAgo } from "@/lib/dates";
@@ -27,11 +26,11 @@ export default async function ApplicantPage(props: PageProps<"/editors/applicant
   const { id } = await props.params;
   if (!UUID.test(id)) notFound();
 
-  const { applicant, activity, submitLink, lastTestEditUrl, renderedAt } = await getApplicantDetail(id);
+  const { applicant, activity, invitation, renderedAt } = await getApplicantDetail(id);
 
   return (
     <>
-      <RealtimeRefresh channel={`applicant-${id}`} tables="applicants" />
+      <RealtimeRefresh channel={`applicant-${id}`} tables="applicants,workspace_invitations" />
       <ApplicantHeader
         applicant={{
           id: applicant.id,
@@ -39,10 +38,8 @@ export default async function ApplicantPage(props: PageProps<"/editors/applicant
           email: applicant.email,
           stage: applicant.stage,
           editorId: applicant.editor_id,
-          testEditUrl: applicant.test_edit_url,
           appliedLabel: `Applied ${timeAgo(applicant.created_at, renderedAt)}`,
         }}
-        lastTestEditUrl={lastTestEditUrl}
       />
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
@@ -84,18 +81,6 @@ export default async function ApplicantPage(props: PageProps<"/editors/applicant
             )}
           </Panel>
 
-          <TestEditPanel
-            applicant={{
-              id: applicant.id,
-              name: applicant.full_name,
-              email: applicant.email,
-              stage: applicant.stage,
-              testEditUrl: applicant.test_edit_url,
-              testSubmissionUrl: applicant.test_submission_url,
-            }}
-            submitLink={submitLink}
-            lastTestEditUrl={lastTestEditUrl}
-          />
           <ReviewPanel applicantId={applicant.id} rating={applicant.rating} notes={applicant.admin_notes} />
         </div>
 
@@ -108,6 +93,7 @@ export default async function ApplicantPage(props: PageProps<"/editors/applicant
               stage: applicant.stage,
               editorId: applicant.editor_id,
             }}
+            invitation={invitation}
           />
           <HistoryPanel entries={activity} renderedAt={renderedAt} />
         </div>

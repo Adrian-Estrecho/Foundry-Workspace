@@ -11,12 +11,22 @@ import { Textarea } from "@/components/ui/textarea";
 import { submitTrialTask } from "../../onboarding-actions";
 import { TrialTaskView, type TrialTask } from "../trial-task-view";
 
-export function TrialStep({ tasks, today, renderedAt }: { tasks: TrialTask[]; today: string; renderedAt: number }) {
+export function TrialStep({
+  tasks,
+  today,
+  renderedAt,
+  workspaceName,
+}: {
+  tasks: TrialTask[];
+  today: string;
+  renderedAt: number;
+  workspaceName: string;
+}) {
   const task = tasks[0];
   if (!task) {
     return (
       <p className="text-sm text-muted-foreground">
-        Foundry will assign your trial task soon. You&apos;ll get a notification, and it will appear here.
+        {workspaceName} will send your test edit soon. You&apos;ll get a notification, and it will appear here.
       </p>
     );
   }
@@ -43,7 +53,7 @@ function SubmitForm({ task }: { task: TrialTask }) {
         setErrors(result.fieldErrors ?? {});
         return void toast.error(result.error);
       }
-      toast.success(inReview ? "Updated link sent" : "Sent for review", { description: "Foundry will take a look and get back to you." });
+      toast.success(inReview ? "Updated link sent" : "Sent for review", { description: "They'll take a look and get back to you." });
       setErrors({});
       setFormKey((k) => k + 1);
       router.refresh();

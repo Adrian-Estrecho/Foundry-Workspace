@@ -12,7 +12,7 @@ import { submitApplication, type ApplyState } from "./actions";
 
 const noopSubscribe = () => () => {};
 
-export function ApplyForm({ token, timeZones }: { token: string; timeZones: string[] }) {
+export function ApplyForm({ slug, token, timeZones }: { slug: string; token: string; timeZones: string[] }) {
   const [state, action, pending] = useActionState<ApplyState, FormData>(submitApplication, undefined);
   const errors = state?.fieldErrors ?? {};
   const value = (name: string) => {
@@ -36,6 +36,7 @@ export function ApplyForm({ token, timeZones }: { token: string; timeZones: stri
 
   return (
     <form key={formKey} action={action} className="grid gap-8 rounded-xl border bg-card p-6 sm:p-8" noValidate>
+      <input type="hidden" name="slug" value={slug} />
       <input type="hidden" name="token" value={token} />
       {/* Honeypot: invisible to people, tempting to bots. */}
       <div aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 overflow-hidden">

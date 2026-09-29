@@ -46,7 +46,7 @@ export function OnboardingPanel({
   return (
     <Panel
       title="Onboarding"
-      description={completedAt ? `Finished ${timeAgo(completedAt, renderedAt)}` : `${done} of ${items.length} done`}
+      description={completedAt ? `All steps done ${timeAgo(completedAt, renderedAt)}` : `${done} of ${items.length} done`}
       action={
         <span
           className={cn(

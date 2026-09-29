@@ -1,4 +1,4 @@
-/** Onboarding steps editors tick themselves (Foundry can't check them). */
+/** Onboarding steps editors tick themselves (ReEdit can't check them). */
 export const SELF_REPORTED_STEPS = ["frameio", "asset_pack"] as const;
 
 /** Steps that tick themselves, with the reason shown in the UI. */
@@ -6,7 +6,8 @@ export const AUTO_STEP_HINTS: Record<string, string> = {
   contract_nda: "Ticks itself when both the signed contract and the NDA are uploaded",
   payment_details: "Ticks itself when payment details are saved",
   sops: "Ticks itself when every required SOP is marked as read",
-  trial_task: "Ticks itself when an admin approves the trial task",
+  trial_task: "Ticks itself when an admin passes the test edit",
+  interview: "Ticks itself when the interview is marked as passed",
 };
 
 export const DOC_TYPES = [

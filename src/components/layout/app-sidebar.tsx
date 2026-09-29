@@ -5,26 +5,30 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogOutIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, SettingsIcon } from "lucide-react";
 import { signOut } from "@/app/(auth)/actions";
-import { FoundryMark } from "@/components/brand/logo";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { WorkspaceSwitcher, type SwitcherWorkspace } from "@/features/workspaces/components/workspace-switcher";
 import { cn } from "@/lib/utils";
-import type { Enums } from "@/types/database";
-import { isActivePath, navFor, navSections, type NavItem } from "./nav-config";
+import { isActivePath, navFor, navSections, type NavAccess, type NavItem } from "./nav-config";
 
 export const SIDEBAR_COOKIE = "foundry-sidebar";
 
 type NavProps = {
-  role: Enums<"user_role">;
-  onboardingDone: boolean;
+  access: NavAccess;
   badges: Record<string, number>;
 };
+
+export type SwitcherProps = { current: SwitcherWorkspace; workspaces: SwitcherWorkspace[] };
 
 /**
  * Desktop navigation: a full-height column with grouped links. It can
  * collapse to icons only; the choice is remembered in a cookie so it renders
  * correctly on the server.
  */
-export function AppSidebar({ defaultExpanded, ...nav }: NavProps & { defaultExpanded: boolean }) {
+export function AppSidebar({
+  defaultExpanded,
+  switcher,
+  ...nav
+}: NavProps & { defaultExpanded: boolean; switcher: SwitcherProps }) {
   const pathname = usePathname();
   const [expanded, setExpanded] = React.useState(defaultExpanded);
 
@@ -42,14 +46,9 @@ export function AppSidebar({ defaultExpanded, ...nav }: NavProps & { defaultExpa
         expanded ? "w-60" : "w-16",
       )}
     >
-      <Link
-        href="/dashboard"
-        className={cn("flex h-14 shrink-0 items-center gap-2.5", expanded ? "px-5" : "justify-center")}
-        aria-label="Foundry home"
-      >
-        <FoundryMark className="size-7 shrink-0" />
-        {expanded && <span className="font-heading text-base font-semibold tracking-tight">Foundry</span>}
-      </Link>
+      <div className={cn("flex h-14 shrink-0 items-center", expanded ? "px-3" : "px-2")}>
+        <WorkspaceSwitcher {...switcher} expanded={expanded} />
+      </div>
 
       <NavList {...nav} expanded={expanded} className="flex-1 overflow-y-auto px-3 py-2" />
 
@@ -78,8 +77,7 @@ export function AppSidebar({ defaultExpanded, ...nav }: NavProps & { defaultExpa
 
 /** The grouped links, shared by the sidebar and the mobile drawer. */
 export function NavList({
-  role,
-  onboardingDone,
+  access,
   badges,
   expanded = true,
   onNavigate,
@@ -87,7 +85,7 @@ export function NavList({
   className,
 }: NavProps & { expanded?: boolean; onNavigate?: () => void; itemClassName?: string; className?: string }) {
   const pathname = usePathname();
-  const sections = navSections(navFor(role, { onboardingDone }));
+  const sections = navSections(navFor(access));
 
   return (
     <nav className={cn("grid content-start gap-5", className)} aria-label="Main">

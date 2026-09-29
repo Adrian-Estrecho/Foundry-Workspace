@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { fail, fieldErrorsOf } from "@/lib/action-result";
 import { requireAdmin } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { Constants } from "@/types/database";
 
@@ -155,8 +156,10 @@ export async function deleteProject(id: string): Promise<ProjectActionResult> {
   if (error) return fail(error.message);
   if (!data) return fail("That project no longer exists.");
 
+  // Storage policies only reach files of tasks that still exist, so the
+  // cleanup runs as the service role, on paths this admin could read above.
   const paths = (files ?? []).map((f) => f.storage_path).filter((p): p is string => Boolean(p));
-  if (paths.length) await supabase.storage.from("task-files").remove(paths);
+  if (paths.length) await createAdminClient().storage.from("task-files").remove(paths);
 
   revalidateProject(undefined, data.client_id);
   return { ok: true, projectId: id };

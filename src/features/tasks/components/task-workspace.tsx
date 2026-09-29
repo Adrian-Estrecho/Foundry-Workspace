@@ -88,7 +88,7 @@ export function TaskWorkspace({
 
   const announce = (task: TaskRef, status: TaskStatus) =>
     toast.success(`${task.title} moved to ${taskStatusMeta(status).label}`, {
-      description: status === "for_review" && !isAdmin ? "Foundry has been notified." : undefined,
+      description: status === "for_review" && !isAdmin ? "Your admins have been notified." : undefined,
     });
 
   const askFeedback = (task: TaskRef, position: number | null) =>

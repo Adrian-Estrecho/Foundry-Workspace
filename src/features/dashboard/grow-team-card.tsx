@@ -9,10 +9,13 @@ import { cn } from "@/lib/utils";
 
 /** Share the public forms, review applicants. */
 export function GrowTeamCard({
+  slug,
   applicants,
   newApplicants,
   className,
 }: {
+  /** The workspace's link name, for its public forms. */
+  slug: string;
   applicants: { id: string; full_name: string }[];
   newApplicants: number;
   className?: string;
@@ -50,10 +53,10 @@ export function GrowTeamCard({
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={() => copy("/intake", "Client intake")}>
+        <Button variant="outline" size="sm" onClick={() => copy(`/intake/${slug}`, "Client intake")}>
           <LinkIcon /> Intake form
         </Button>
-        <Button variant="outline" size="sm" onClick={() => copy("/apply", "Editor application")}>
+        <Button variant="outline" size="sm" onClick={() => copy(`/apply/${slug}`, "Editor application")}>
           <LinkIcon /> Application form
         </Button>
       </div>

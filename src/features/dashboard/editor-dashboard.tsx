@@ -1,7 +1,6 @@
 import Link from "next/link";
 import {
   AlarmClockIcon,
-  ArrowRightIcon,
   CalendarClockIcon,
   EyeIcon,
   ListTodoIcon,
@@ -13,7 +12,6 @@ import { KpiTile } from "@/components/shared/kpi-tile";
 import { EmptyState, PageHeader, Panel } from "@/components/shared/panel";
 import { RealtimeRefresh } from "@/components/shared/realtime-refresh";
 import { StatusChip } from "@/components/shared/status";
-import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import type { CurrentUser } from "@/lib/auth";
 import { dueLabel, formatDuration, greeting, timeAgo, toHours } from "@/lib/dates";
@@ -25,7 +23,7 @@ import type { getEditorDashboard } from "./queries";
 
 type Data = Awaited<ReturnType<typeof getEditorDashboard>>;
 
-/** An editor's "My day": status, deadlines, hours and onboarding. */
+/** An approved editor's "My day": status, deadlines and hours. */
 export function EditorDashboard({ user, data }: { user: CurrentUser; data: Data }) {
   const { status, kpis, today } = data;
   const overdue = data.tasks.filter((t) => t.dueDate && t.dueDate < today);
@@ -100,27 +98,9 @@ export function EditorDashboard({ user, data }: { user: CurrentUser; data: Data 
         </div>
 
         <div className="grid content-start gap-5 xl:col-span-4">
-          {data.onboarding && (
-            <section className="rounded-xl border bg-card p-5">
-              <h2 className="font-heading text-base font-medium">Finish onboarding</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {data.onboarding.done} of {data.onboarding.total} steps done
-              </p>
-              <Progress
-                value={(data.onboarding.done / Math.max(1, data.onboarding.total)) * 100}
-                className="mt-4 h-1.5"
-              />
-              <Button asChild className="mt-5 w-full">
-                <Link href="/onboarding">
-                  Continue <ArrowRightIcon />
-                </Link>
-              </Button>
-            </section>
-          )}
-
           <Panel title="Latest announcement">
             {data.announcement ? (
-              <Link href="/announcements" className="group block rounded-lg bg-surface p-4 ring-1 ring-border hover:bg-accent/50">
+              <Link href="/messages" className="group block rounded-lg bg-surface p-4 ring-1 ring-border hover:bg-accent/50">
                 <p className="flex items-center gap-2 font-medium">
                   {data.announcement.is_pinned && <PinIcon className="size-4 text-primary" />}
                   {data.announcement.title}

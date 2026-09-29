@@ -26,6 +26,7 @@ type State = {
 type Action =
   | { type: "sync"; rows: Notification[]; unread: number }
   | { type: "insert"; row: Notification }
+  | { type: "update"; row: Notification }
   | { type: "read"; ids: string[]; at: string }
   | { type: "readAll"; at: string }
   | { type: "loading" | "failed"; filter: NotificationFilter }
@@ -57,6 +58,14 @@ function reducer(state: State, action: Action): State {
         byId: { ...state.byId, [action.row.id]: action.row },
         unread: state.unread + (action.row.read_at ? 0 : 1),
       };
+    }
+    case "update": {
+      // A message notification refreshed by a newer message comes back
+      // unread and to the top; anything else just takes the new values.
+      const known = state.byId[action.row.id];
+      if (!known) return reducer(state, { type: "insert", row: action.row });
+      const unreadChange = Number(!action.row.read_at) - Number(!known.read_at);
+      return { ...state, byId: { ...state.byId, [action.row.id]: action.row }, unread: Math.max(0, state.unread + unreadChange) };
     }
     case "read": {
       const byId = { ...state.byId };
@@ -155,6 +164,18 @@ export function useNotifications(userId: string, initial: Notification[], initia
               const row = payload.new as Notification;
               dispatch({ type: "insert", row });
               toast(row.title, { description: row.body ?? undefined });
+            },
+          )
+          .on(
+            "postgres_changes",
+            { event: "UPDATE", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
+            (payload) => {
+              const row = payload.new as Notification;
+              dispatch({ type: "update", row });
+              // Surfaced again just now by something new (a message in the same thread).
+              if (!row.read_at && Date.now() - Date.parse(row.created_at) < 30_000) {
+                toast(row.title, { description: row.body ?? undefined });
+              }
             },
           ),
         {

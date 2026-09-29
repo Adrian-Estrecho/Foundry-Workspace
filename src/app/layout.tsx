@@ -10,9 +10,9 @@ const outfit = Outfit({ variable: "--font-outfit", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: { default: "Foundry", template: "%s · Foundry" },
-  description: "Foundry: run Foundry Media from one place.",
-  applicationName: "Foundry",
+  title: { default: "ReEdit", template: "%s · ReEdit" },
+  description: "ReEdit: run your editing team from one place.",
+  applicationName: "ReEdit",
 };
 
 export const viewport: Viewport = {

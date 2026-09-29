@@ -99,9 +99,11 @@ export async function getAdminDashboard(user: CurrentUser) {
         `id, work_status, status_since, weekly_hours,
          profile:profiles!editors_id_fkey(full_name, avatar_url, last_seen_at),
          task:tasks!editors_current_task_fkey(title, project:projects(name)),
-         shift:shifts!editors_current_shift_fkey(clock_in_at)`,
+         shift:shifts!editors_current_shift_fkey(clock_in_at),
+         member:workspace_members!editors_member_fkey!inner(status)`,
       )
-      .eq("is_active", true),
+      .eq("is_active", true)
+      .eq("member.status", "active"),
     supabase
       .from("tasks")
       .select(
@@ -191,11 +193,11 @@ export async function getEditorDashboard(user: CurrentUser) {
   const today = todayIn(timeZone);
   const now = Date.now();
 
-  const [editor, tasks, checklist, announcement, hours, completed] = await Promise.all([
+  const [editor, tasks, announcement, hours, completed] = await Promise.all([
     supabase
       .from("editors")
       .select(
-        `work_status, status_since, weekly_hours, onboarding_completed_at,
+        `work_status, status_since, weekly_hours,
          task:tasks!editors_current_task_fkey(title, project:projects(name)),
          shift:shifts!editors_current_shift_fkey(clock_in_at)`,
       )
@@ -208,7 +210,6 @@ export async function getEditorDashboard(user: CurrentUser) {
       .neq("status", "done")
       .order("due_date", { nullsFirst: false })
       .limit(50),
-    supabase.from("editor_checklist_items").select("is_done").eq("editor_id", user.id),
     supabase
       .from("announcements")
       .select("id, title, body, created_at, is_pinned")
@@ -223,7 +224,6 @@ export async function getEditorDashboard(user: CurrentUser) {
   const weekStart = startOfWeek(today);
   const hoursThisWeek = hours.filter((d) => d.day >= weekStart).reduce((sum, d) => sum + d.seconds, 0);
   const openTasks = tasks.data ?? [];
-  const items = checklist.data ?? [];
 
   return {
     today,
@@ -251,9 +251,6 @@ export async function getEditorDashboard(user: CurrentUser) {
       progress: t.progress_pct,
       projectName: t.project?.name ?? "Internal",
     })),
-    onboarding: editor.data?.onboarding_completed_at
-      ? null
-      : { done: items.filter((i) => i.is_done).length, total: items.length },
     announcement: announcement.data,
     hours,
     completed,

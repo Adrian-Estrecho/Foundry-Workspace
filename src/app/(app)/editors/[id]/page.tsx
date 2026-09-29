@@ -17,7 +17,10 @@ import { KpiTile } from "@/components/shared/kpi-tile";
 import { EmptyState, Panel } from "@/components/shared/panel";
 import { RealtimeRefresh } from "@/components/shared/realtime-refresh";
 import { PaymentSummary } from "@/features/editors/components/payment-summary";
+import { OnboardingDecisionPanel } from "@/features/editors/components/profile/decision-panel";
 import { EditorHeader } from "@/features/editors/components/profile/editor-header";
+import { InterviewPanel } from "@/features/editors/components/profile/interview-panel";
+import { NotesPanel } from "@/features/editors/components/profile/notes-panel";
 import { OnboardingPanel } from "@/features/editors/components/profile/onboarding-panel";
 import { TrialTaskPanel } from "@/features/editors/components/profile/trial-task-panel";
 import { WEEKDAYS } from "@/features/editors/constants";
@@ -48,11 +51,16 @@ export default async function EditorPage(props: PageProps<"/editors/[id]">) {
   const { editor, profile, performance, renderedAt, today } = data;
   const lastSeen = profile.last_seen_at ? new Date(profile.last_seen_at).getTime() : 0;
   const workDays = WEEKDAYS.filter((d) => editor.work_days.includes(d.value)).map((d) => d.short);
-  const showTrial = !editor.onboarding_completed_at || data.trialTasks.length > 0;
+  const onboarding = data.member?.status === "onboarding";
+  const showTrial = onboarding || data.trialTasks.length > 0;
+  const missing = data.checklist.filter((item) => !item.is_done).map((item) => item.label);
 
   return (
     <>
-      <RealtimeRefresh channel={`editor-${id}`} tables="editors,editor_checklist_items,editor_documents,tasks" />
+      <RealtimeRefresh
+        channel={`editor-${id}`}
+        tables="editors,editor_checklist_items,editor_documents,tasks,editor_interviews,workspace_members"
+      />
       <EditorHeader
         editor={{
           id: editor.id,
@@ -63,7 +71,7 @@ export default async function EditorPage(props: PageProps<"/editors/[id]">) {
           isActive: editor.is_active,
           workStatus: editor.work_status,
           recentlySeen: renderedAt - lastSeen < RECENT_MS,
-          invitePending: data.invitePending,
+          memberStatus: data.member?.status ?? "active",
         }}
         details={{
           software: editor.software,
@@ -72,10 +80,7 @@ export default async function EditorPage(props: PageProps<"/editors/[id]">) {
           weeklyHours: editor.weekly_hours,
           workDays: editor.work_days,
           shiftStart: editor.shift_start,
-          timezone: profile.timezone,
-          phone: profile.phone,
         }}
-        timeZones={Intl.supportedValuesOf("timeZone")}
       />
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -111,6 +116,15 @@ export default async function EditorPage(props: PageProps<"/editors/[id]">) {
               tasks={data.trialTasks}
               today={today}
               renderedAt={renderedAt}
+            />
+          )}
+          {(onboarding || data.interviews.length > 0) && (
+            <InterviewPanel
+              editorId={editor.id}
+              editorName={profile.full_name}
+              editorTimeZone={profile.timezone}
+              adminTimeZone={user.timezone}
+              interviews={data.interviews}
             />
           )}
 
@@ -187,6 +201,17 @@ export default async function EditorPage(props: PageProps<"/editors/[id]">) {
         </div>
 
         <div className="grid grid-cols-1 content-start gap-5 xl:col-span-4">
+          {onboarding && (
+            <OnboardingDecisionPanel
+              editorId={editor.id}
+              editorName={profile.full_name}
+              workspaceName={user.workspace.name}
+              stepsDone={data.checklist.length - missing.length}
+              stepsTotal={data.checklist.length}
+              missing={missing}
+            />
+          )}
+          <NotesPanel editorId={editor.id} notes={data.notes} renderedAt={renderedAt} />
           <Panel title="Details">
             <dl className="grid grid-cols-2 gap-4">
               <Fact label="Hourly rate" value={editor.hourly_rate !== null ? `$${editor.hourly_rate}/h` : null} />

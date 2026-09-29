@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2Icon } from "lucide-react";
-import { CheckboxChips, FieldGroup, FormRow, NativeSelect, submitWith } from "@/components/shared/form";
+import { CheckboxChips, FieldGroup, FormRow, submitWith } from "@/components/shared/form";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -19,8 +19,6 @@ export type EditorDetails = {
   weeklyHours: number | null;
   workDays: number[];
   shiftStart: string;
-  timezone: string;
-  phone: string | null;
 };
 
 export function EditorDetailsDialog({
@@ -28,18 +26,15 @@ export function EditorDetailsDialog({
   onOpenChange,
   editorId,
   details,
-  timeZones,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editorId: string;
   details: EditorDetails;
-  timeZones: string[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
   const [errors, setErrors] = React.useState<Record<string, string>>({});
-  const zones = timeZones.includes(details.timezone) ? timeZones : [details.timezone, ...timeZones];
 
   const submit = (formData: FormData) =>
     startTransition(async () => {
@@ -95,16 +90,9 @@ export function EditorDetailsDialog({
           <FormRow label="Usual start time" hint="In their timezone." error={errors.shift_start}>
             <Input name="shift_start" type="time" defaultValue={details.shiftStart.slice(0, 5)} required />
           </FormRow>
-          <FormRow label="Timezone" error={errors.timezone}>
-            <NativeSelect name="timezone" defaultValue={details.timezone}>
-              {zones.map((zone) => (
-                <option key={zone}>{zone}</option>
-              ))}
-            </NativeSelect>
-          </FormRow>
-          <FormRow label="Phone" error={errors.phone}>
-            <Input name="phone" type="tel" defaultValue={details.phone ?? ""} />
-          </FormRow>
+          <p className="self-end text-xs text-muted-foreground">
+            Their timezone and phone number are part of their own account. They change them in Settings.
+          </p>
           <DialogFooter className="sm:col-span-2">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel

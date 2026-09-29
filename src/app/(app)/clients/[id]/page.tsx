@@ -12,8 +12,11 @@ import { NotesPanel } from "@/features/clients/components/detail/notes-panel";
 import { PaymentsPanel } from "@/features/clients/components/detail/payments-panel";
 import { ProjectsPanel } from "@/features/clients/components/detail/projects-panel";
 import { getClientDetail } from "@/features/clients/queries";
+import { ClientPortalPanel } from "@/features/portal/components/portal-admin";
 import { requireAdmin } from "@/lib/auth";
 import { formatDay, timeAgo, todayIn } from "@/lib/dates";
+import { env } from "@/lib/env";
+import { createClient } from "@/lib/supabase/server";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -29,13 +32,16 @@ export default async function ClientPage(props: PageProps<"/clients/[id]">) {
   const { id } = await props.params;
   if (!UUID.test(id)) notFound();
 
-  const { client, checklist, projects, assignedEditors, activity, contractUrl, editors, renderedAt } = await getClientDetail(id);
+  const [{ client, checklist, projects, assignedEditors, activity, contractUrl, editors, renderedAt }, { data: portal }] = await Promise.all([
+    getClientDetail(id),
+    (await createClient()).from("client_portals").select("token, enabled, last_viewed_at").eq("client_id", id).maybeSingle(),
+  ]);
   const today = todayIn(user.timezone);
   const lead = client.lead;
 
   return (
     <>
-      <RealtimeRefresh channel={`client-${id}`} tables="clients,client_checklist_items,projects,project_editors" />
+      <RealtimeRefresh channel={`client-${id}`} tables="clients,client_checklist_items,projects,project_editors,message_threads" />
       <ClientHeader
         client={{
           id: client.id,
@@ -106,6 +112,13 @@ export default async function ClientPage(props: PageProps<"/clients/[id]">) {
         </div>
 
         <div className="grid content-start gap-5 xl:col-span-4">
+          <ClientPortalPanel
+            clientId={client.id}
+            clientName={client.name}
+            portal={portal ? { token: portal.token, enabled: portal.enabled, lastViewedAt: portal.last_viewed_at } : null}
+            siteUrl={env.siteUrl}
+            renderedAt={renderedAt}
+          />
           <ContactPanel
             clientId={client.id}
             contact={{

@@ -2,9 +2,11 @@ import "server-only";
 
 /**
  * Outgoing email.
- *   * RESEND_API_KEY set → sent with Resend (production).
- *   * MAILPIT_URL set    → delivered to the local Mailpit inbox (development).
- *   * neither            → logged to the server console.
+ *   * MAILPIT_URL set   → delivered to the local Mailpit inbox (development),
+ *                         even when a Brevo key is present, so local work and
+ *                         tests never email real people.
+ *   * BREVO_API_KEY set → sent with Brevo's transactional API (production).
+ *   * neither           → logged to the server console.
  * Email is always best-effort: failures are logged, never thrown, so a lost
  * email can't break the action that triggered it.
  */
@@ -23,23 +25,14 @@ function parseAddress(value: string) {
 }
 
 export async function sendEmail(email: Email): Promise<void> {
-  const from = process.env.EMAIL_FROM ?? "Foundry <no-reply@foundrymedia.co>";
+  const from = process.env.EMAIL_FROM ?? "ReEdit <no-reply@foundrymedia.co>";
   const to = Array.isArray(email.to) ? email.to : [email.to];
   if (to.length === 0) return;
 
   try {
-    if (process.env.RESEND_API_KEY) {
-      const response = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ from, to, subject: email.subject, html: email.html, text: email.text, reply_to: email.replyTo }),
-      });
-      if (!response.ok) console.error("[email] Resend rejected the message:", response.status, await response.text());
-      return;
-    }
+    const sender = parseAddress(from);
 
     if (process.env.MAILPIT_URL) {
-      const sender = parseAddress(from);
       const response = await fetch(`${process.env.MAILPIT_URL}/api/v1/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -53,6 +46,23 @@ export async function sendEmail(email: Email): Promise<void> {
         }),
       });
       if (!response.ok) console.error("[email] Mailpit rejected the message:", response.status, await response.text());
+      return;
+    }
+
+    if (process.env.BREVO_API_KEY) {
+      const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST",
+        headers: { "api-key": process.env.BREVO_API_KEY, "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          sender: { email: sender.email, name: sender.name || undefined },
+          to: to.map((address) => ({ email: address })),
+          replyTo: email.replyTo ? { email: email.replyTo } : undefined,
+          subject: email.subject,
+          htmlContent: email.html,
+          textContent: email.text,
+        }),
+      });
+      if (!response.ok) console.error("[email] Brevo rejected the message:", response.status, await response.text());
       return;
     }
 
@@ -78,6 +88,7 @@ export function renderEmail({
   cta,
   footnote,
   accent = "#F2711C",
+  brand = "ReEdit",
 }: {
   heading: string;
   intro?: string;
@@ -86,12 +97,14 @@ export function renderEmail({
   /** Small print under the button. */
   footnote?: string;
   accent?: string;
+  /** Name at the top: the workspace, or ReEdit itself. */
+  brand?: string;
 }) {
   const visibleRows = rows.filter(([, value]) => value);
   const html = `<!doctype html><html><body style="margin:0;background:#130d0a;font-family:Helvetica,Arial,sans-serif;color:#f5efe9">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:40px 16px"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#1f1612;border:1px solid #33261f;border-radius:20px;padding:36px">
-<tr><td style="font-size:20px;font-weight:600;color:${accent}">Foundry</td></tr>
+<tr><td style="font-size:20px;font-weight:600;color:${accent}">${escapeHtml(brand)}</td></tr>
 <tr><td style="padding-top:24px;font-size:22px;font-weight:600">${escapeHtml(heading)}</td></tr>
 ${intro ? `<tr><td style="padding-top:10px;font-size:15px;line-height:1.6;color:#c9bcb2">${escapeHtml(intro)}</td></tr>` : ""}
 ${

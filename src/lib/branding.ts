@@ -1,21 +1,31 @@
 import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
-import { DEFAULT_ACCENT } from "@/lib/theme";
+
+export type Branding = {
+  workspaceId: string;
+  name: string;
+  defaultAccent: string;
+  acceptingApplications: boolean;
+};
 
 /**
- * Company name and default accent. Readable before sign-in (via the
- * public_branding() function), for the login and public form pages.
+ * A workspace's public face, found by the slug in its links (/apply/<slug>,
+ * /intake/<slug>). Readable before sign-in through the public_branding()
+ * function. Null for an unknown slug.
  */
-export const getBranding = cache(async () => {
+export const getBranding = cache(async (slug: string): Promise<Branding | null> => {
   try {
     const supabase = await createClient();
-    const { data } = await supabase.rpc("public_branding").maybeSingle();
+    const { data } = await supabase.rpc("public_branding", { p_slug: slug }).maybeSingle();
+    if (!data) return null;
     return {
-      companyName: data?.company_name ?? "Foundry Media",
-      defaultAccent: data?.default_accent ?? DEFAULT_ACCENT,
+      workspaceId: data.workspace_id,
+      name: data.name,
+      defaultAccent: data.default_accent,
+      acceptingApplications: data.accepting_applications,
     };
   } catch {
-    return { companyName: "Foundry Media", defaultAccent: DEFAULT_ACCENT };
+    return null;
   }
 });

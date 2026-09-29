@@ -71,7 +71,7 @@ export function MyTasks({ tasks, today, view }: { tasks: TaskSummary[]; today: s
           <TaskBoard tasks={tasks} />
         ) : tasks.length === 0 ? (
           <div className="rounded-xl border bg-card">
-            <EmptyState icon={ListTodoIcon} title="No tasks yet" description="When Foundry assigns you work, it shows up here and you'll get a notification." />
+            <EmptyState icon={ListTodoIcon} title="No tasks yet" description="When your team assigns you work, it shows up here and you'll get a notification." />
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-6">

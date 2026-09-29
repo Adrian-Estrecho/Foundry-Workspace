@@ -3,6 +3,11 @@
 import {
   AlarmClockIcon,
   BellIcon,
+  CalendarCheckIcon,
+  Clock3Icon,
+  OctagonAlertIcon,
+  UserRoundCheckIcon,
+  UserXIcon,
   CalendarClockIcon,
   CheckCheckIcon,
   CheckIcon,
@@ -32,6 +37,15 @@ const ICONS: Partial<Record<Enums<"notification_type">, LucideIcon>> = {
   new_announcement: MegaphoneIcon,
   meeting_reminder: CalendarClockIcon,
   mention: MessageSquareIcon,
+  new_message: MessageSquareIcon,
+  missed_clock_in: Clock3Icon,
+  offline_with_overdue: UserXIcon,
+  shift_ended: Clock3Icon,
+  blocker_reported: OctagonAlertIcon,
+  member_joined: UserPlusIcon,
+  onboarding_ready: UserRoundCheckIcon,
+  onboarding_approved: RocketIcon,
+  interview_scheduled: CalendarCheckIcon,
 };
 
 /**

@@ -2,10 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { blankToNull, fail, fieldErrorsOf, isTimeZone, optionalText, type ActionResult } from "@/lib/action-result";
+import { blankToNull, fail, fieldErrorsOf, optionalText, type ActionResult } from "@/lib/action-result";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { createEditorAccount, sendEditorInvite } from "./invite";
 
 function revalidateEditor(id?: string) {
   revalidatePath("/editors");
@@ -18,50 +17,8 @@ const hoursSchema = optionalNumber(z.number().int("Use whole hours.").min(0).max
 
 // -----------------------------------------------------------------------------
 // Roster
+// (Invitations live in features/invitations.)
 // -----------------------------------------------------------------------------
-
-const inviteSchema = z.object({
-  full_name: z.string().trim().min(2, "Enter their name.").max(120),
-  email: z.email("Enter a valid email.").max(200),
-  timezone: z.string().refine(isTimeZone, "Pick a valid timezone."),
-  hourly_rate: rateSchema,
-  weekly_hours: hoursSchema,
-});
-
-/** Adds an editor who didn't come through the application form, and emails their invite. */
-export async function inviteEditor(formData: FormData): Promise<ActionResult<{ id: string }>> {
-  await requireAdmin();
-  const parsed = inviteSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return fail("Please check the highlighted fields.", fieldErrorsOf(parsed.error));
-  const input = parsed.data;
-
-  const account = await createEditorAccount({ email: input.email.toLowerCase(), fullName: input.full_name, timezone: input.timezone });
-  if (!account.ok) return fail(account.error, account.error.includes("email") ? { email: account.error } : undefined);
-
-  const supabase = await createClient();
-  await supabase
-    .from("editors")
-    .update({ hourly_rate: input.hourly_rate, weekly_hours: input.weekly_hours })
-    .eq("id", account.userId);
-
-  const sent = await sendEditorInvite(input.email, input.full_name);
-  revalidateEditor();
-  if (!sent.ok) return fail(`Account created, but the invite couldn't be sent: ${sent.error}. Try Resend invite on their profile.`);
-  return { ok: true, data: { id: account.userId } };
-}
-
-/** Sends the Welcome to Foundry link again (or a set-password link once they've joined). */
-export async function resendInvite(editorId: string): Promise<ActionResult> {
-  await requireAdmin();
-  if (!z.uuid().safeParse(editorId).success) return fail("Invalid editor.");
-
-  const supabase = await createClient();
-  const { data: profile } = await supabase.from("profiles").select("email, full_name").eq("id", editorId).maybeSingle();
-  if (!profile) return fail("That editor no longer exists.");
-
-  const sent = await sendEditorInvite(profile.email, profile.full_name);
-  return sent.ok ? { ok: true } : fail(sent.error);
-}
 
 export async function setEditorActive(editorId: string, active: boolean): Promise<ActionResult> {
   await requireAdmin();
@@ -83,10 +40,9 @@ const detailsSchema = z.object({
   weekly_hours: hoursSchema,
   work_days: z.array(z.coerce.number().int().min(1).max(7)).min(1, "Pick at least one work day."),
   shift_start: z.string().regex(/^\d{2}:\d{2}$/, "Pick a start time."),
-  timezone: z.string().refine(isTimeZone, "Pick a valid timezone."),
-  phone: optionalText(40),
 });
 
+/** Work details for this workspace. (Timezone and phone are the editor's own, in their settings.) */
 export async function updateEditorDetails(editorId: string, formData: FormData): Promise<ActionResult> {
   await requireAdmin();
   if (!z.uuid().safeParse(editorId).success) return fail("Invalid editor.");
@@ -97,17 +53,13 @@ export async function updateEditorDetails(editorId: string, formData: FormData):
     work_days: formData.getAll("work_days"),
   });
   if (!parsed.success) return fail("Please check the highlighted fields.", fieldErrorsOf(parsed.error));
-  const { timezone, phone, work_days, ...details } = parsed.data;
+  const { work_days, ...details } = parsed.data;
 
   const supabase = await createClient();
-  const [editorUpdate, profileUpdate] = await Promise.all([
-    supabase
-      .from("editors")
-      .update({ ...details, work_days: [...new Set(work_days)].sort((a, b) => a - b) })
-      .eq("id", editorId),
-    supabase.from("profiles").update({ timezone, phone }).eq("id", editorId),
-  ]);
-  const error = editorUpdate.error ?? profileUpdate.error;
+  const { error } = await supabase
+    .from("editors")
+    .update({ ...details, work_days: [...new Set(work_days)].sort((a, b) => a - b) })
+    .eq("id", editorId);
   if (error) return fail(error.message);
 
   revalidateEditor(editorId);
@@ -142,7 +94,7 @@ const trialSchema = z.object({
   due_date: z.preprocess(blankToNull, z.iso.date("Pick a valid date.").nullable()),
 });
 
-/** Creates the editor's trial task (internal: no client project). */
+/** Creates the editor's test edit (a trial task: internal, no client project). */
 export async function assignTrialTask(editorId: string, formData: FormData): Promise<ActionResult> {
   const user = await requireAdmin();
   if (!z.uuid().safeParse(editorId).success) return fail("Invalid editor.");
@@ -178,7 +130,7 @@ export async function reviewTrialTask(
 
   const supabase = await createClient();
   const { data: task } = await supabase.from("tasks").select("assignee_id, is_trial").eq("id", taskId).maybeSingle();
-  if (!task?.is_trial) return fail("That trial task no longer exists.");
+  if (!task?.is_trial) return fail("That test edit no longer exists.");
 
   if (parsed.data.feedback) {
     const { error } = await supabase

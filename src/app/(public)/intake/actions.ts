@@ -5,8 +5,9 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { sendEmail, renderEmail } from "@/lib/email";
 import { env } from "@/lib/env";
+import { getBranding } from "@/lib/branding";
 import { checkFormToken } from "@/lib/form-token";
-import { adminEmailContext } from "@/lib/notify";
+import { adminEmailContext, workspaceLink } from "@/lib/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type IntakeState =
@@ -39,18 +40,21 @@ const schema = z.object({
 });
 
 /**
- * Public client intake. Spam checks (honeypot + signed timing token) run
- * first; a failed check pretends to succeed so bots learn nothing. The lead
- * and its pipeline card are created atomically by `submit_intake`, which
- * also notifies admins in-app. The admin email goes out after the response.
+ * Public client intake for one workspace (the slug in the link). Spam checks
+ * (honeypot + signed timing token bound to the workspace) run first; a failed
+ * check pretends to succeed so bots learn nothing. The lead and its pipeline
+ * card are created atomically by `submit_intake`, which also notifies the
+ * workspace's admins in-app. The admin email goes out after the response.
  */
 export async function submitIntake(_prev: IntakeState, formData: FormData): Promise<IntakeState> {
   const raw = Object.fromEntries(formData) as Record<string, string>;
   const values = { ...raw, website: "", token: "" };
+  const slug = String(raw.slug ?? "");
+  const thanks = `/thanks?form=intake&w=${encodeURIComponent(slug)}`;
 
-  const token = checkFormToken("intake", raw.token);
+  const token = checkFormToken(`intake:${slug}`, raw.token);
   if (raw.website || token === "invalid" || token === "too_fast") {
-    redirect("/thanks?form=intake");
+    redirect(thanks);
   }
   if (token === "expired") {
     return { error: "This page was open for a long time. Please refresh and send it again.", values };
@@ -66,9 +70,13 @@ export async function submitIntake(_prev: IntakeState, formData: FormData): Prom
     return { error: "Please check the highlighted fields.", fieldErrors, values };
   }
 
+  const branding = await getBranding(slug);
+  if (!branding) return { error: "This link doesn't work anymore. Ask the studio for a new one.", values };
+
   const lead = parsed.data;
   const supabase = createAdminClient();
   const { data: clientId, error } = await supabase.rpc("submit_intake", {
+    p_workspace_id: branding.workspaceId,
     p_name: lead.name,
     p_email: lead.email,
     p_company: lead.company,
@@ -89,10 +97,11 @@ export async function submitIntake(_prev: IntakeState, formData: FormData): Prom
   }
 
   after(async () => {
-    const { recipients, accent } = await adminEmailContext();
+    const { recipients, accent, companyName } = await adminEmailContext(branding.workspaceId);
     const name = lead.company ?? lead.name;
     const email = renderEmail({
       accent,
+      brand: companyName,
       heading: `New lead: ${name}`,
       intro: "A new project enquiry just came in through the intake form. It's waiting in New Lead.",
       rows: [
@@ -106,10 +115,10 @@ export async function submitIntake(_prev: IntakeState, formData: FormData): Prom
         ["References", lead.reference_links.join("\n")],
         ["Notes", lead.notes],
       ],
-      cta: { label: "Open in Foundry", url: `${env.siteUrl}/clients/${clientId}` },
+      cta: { label: "Open in ReEdit", url: workspaceLink(env.siteUrl, branding.workspaceId, `/clients/${clientId}`) },
     });
     await sendEmail({ to: recipients, subject: `New lead: ${name}`, replyTo: lead.email, ...email });
   });
 
-  redirect("/thanks?form=intake");
+  redirect(thanks);
 }

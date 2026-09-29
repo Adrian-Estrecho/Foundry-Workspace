@@ -19,7 +19,7 @@ const STATUS: Record<Enums<"task_status">, { label: string; className: string }>
   in_progress: { label: "In progress", className: "bg-status-online/12 text-status-online ring-status-online/25" },
   for_review: { label: "In review", className: "bg-warning/12 text-warning ring-warning/25" },
   revisions: { label: "Changes requested", className: "bg-danger/10 text-danger ring-danger/25" },
-  done: { label: "Approved", className: "bg-success/12 text-success ring-success/25" },
+  done: { label: "Passed", className: "bg-success/12 text-success ring-success/25" },
 };
 
 export function TrialStatusChip({ status }: { status: Enums<"task_status"> }) {
@@ -31,7 +31,7 @@ export function TrialStatusChip({ status }: { status: Enums<"task_status"> }) {
 }
 
 /**
- * The trial task brief plus its thread: submitted links and feedback, oldest
+ * The test edit (trial task) brief plus its thread: submitted links and feedback, oldest
  * first. Shared by the editor's onboarding page and the admin's editor profile.
  */
 export function TrialTaskView({ task, today, renderedAt }: { task: TrialTask; today: string; renderedAt: number }) {

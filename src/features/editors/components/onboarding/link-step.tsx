@@ -7,7 +7,7 @@ import { CheckIcon, ExternalLinkIcon, Loader2Icon, RotateCcwIcon } from "lucide-
 import { Button } from "@/components/ui/button";
 import { setOnboardingStep } from "../../onboarding-actions";
 
-/** A step Foundry can't verify: open the link, then say it's done. */
+/** A step ReEdit can't verify: open the link, then say it's done. */
 export function LinkStep({
   stepKey,
   done,

@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeftIcon, CheckIcon, ChevronDownIcon, MoreHorizontalIcon, SendIcon, Trash2Icon } from "lucide-react";
+import { ArrowLeftIcon, CheckIcon, ChevronDownIcon, MoreHorizontalIcon, Trash2Icon } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,14 +21,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { deleteApplicant, setApplicantStage } from "../../actions";
-import { APPLICANT_STAGES, applicantStageLabel, type ApplicantStage } from "../../constants";
+import { APPLICANT_STAGES, applicantStageLabel, isDecisionStage, JOINED_MESSAGE, type ApplicantStage } from "../../constants";
 import { DecisionDialog, type Decision } from "../decision-dialog";
-import { SendTestDialog } from "../send-test-dialog";
 
 type Applicant = {
   id: string;
@@ -36,30 +34,25 @@ type Applicant = {
   email: string;
   stage: ApplicantStage;
   editorId: string | null;
-  testEditUrl: string | null;
   appliedLabel: string;
 };
 
-export function ApplicantHeader({ applicant, lastTestEditUrl }: { applicant: Applicant; lastTestEditUrl: string | null }) {
+export function ApplicantHeader({ applicant }: { applicant: Applicant }) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
   const [decision, setDecision] = React.useState<Decision | null>(null);
-  const [testOpen, setTestOpen] = React.useState(false);
-  const [testPrompt, setTestPrompt] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const current = APPLICANT_STAGES.find((s) => s.value === applicant.stage)!;
-  const person = { id: applicant.id, name: applicant.name, email: applicant.email, editorId: applicant.editorId };
+  const person = { id: applicant.id, name: applicant.name, email: applicant.email };
+  const joined = applicant.stage === "joined";
 
   const changeStage = (stage: ApplicantStage) => {
-    if (stage === "approved" || stage === "rejected") return setDecision({ applicant: person, stage });
+    if (stage === "joined" || joined) return void toast.error(JOINED_MESSAGE);
+    if (isDecisionStage(stage)) return setDecision({ applicant: person, stage });
     startTransition(async () => {
       const result = await setApplicantStage(applicant.id, stage);
       if (!result.ok) return void toast.error(result.error);
       toast.success(`Moved to ${applicantStageLabel(stage)}`);
-      if (stage === "test_edit_sent" && !applicant.testEditUrl) {
-        setTestPrompt(true);
-        setTestOpen(true);
-      }
       router.refresh();
     });
   };
@@ -90,7 +83,7 @@ export function ApplicantHeader({ applicant, lastTestEditUrl }: { applicant: App
         <div className="flex items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="secondary" size="lg" className="bg-surface ring-1 ring-border" disabled={pending}>
+              <Button variant="secondary" size="lg" className="bg-surface ring-1 ring-border" disabled={pending || joined}>
                 <span className={cn("size-2.5 rounded-full", current.dot)} />
                 {current.label}
                 <ChevronDownIcon className="text-muted-foreground" />
@@ -98,7 +91,7 @@ export function ApplicantHeader({ applicant, lastTestEditUrl }: { applicant: App
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 rounded-2xl">
               <DropdownMenuLabel>Pipeline stage</DropdownMenuLabel>
-              {APPLICANT_STAGES.map((stage) => (
+              {APPLICANT_STAGES.filter((stage) => stage.value !== "joined").map((stage) => (
                 <DropdownMenuItem key={stage.value} onSelect={() => stage.value !== applicant.stage && changeStage(stage.value)}>
                   <span className={cn("size-2 rounded-full", stage.dot)} />
                   {stage.label}
@@ -114,15 +107,6 @@ export function ApplicantHeader({ applicant, lastTestEditUrl }: { applicant: App
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="rounded-2xl">
-              <DropdownMenuItem
-                onSelect={() => {
-                  setTestPrompt(false);
-                  setTestOpen(true);
-                }}
-              >
-                <SendIcon /> {applicant.testEditUrl ? "Resend test edit" : "Send test edit"}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
               <DropdownMenuItem variant="destructive" onSelect={() => setDeleteOpen(true)}>
                 <Trash2Icon /> Delete application
               </DropdownMenuItem>
@@ -133,24 +117,13 @@ export function ApplicantHeader({ applicant, lastTestEditUrl }: { applicant: App
 
       <DecisionDialog decision={decision} onDone={() => setDecision(null)} />
 
-      <SendTestDialog
-        open={testOpen}
-        onOpenChange={setTestOpen}
-        applicant={{ id: applicant.id, name: applicant.name, email: applicant.email, testEditUrl: applicant.testEditUrl }}
-        defaultUrl={lastTestEditUrl}
-        title={testPrompt ? `Send ${applicant.name} the test edit?` : undefined}
-        description={
-          testPrompt ? "They're at Test Edit Sent. Email them the brief now, with a personal link to send their edit back." : undefined
-        }
-      />
-
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {applicant.name}&apos;s application?</AlertDialogTitle>
             <AlertDialogDescription>
               This removes the application, notes and rating. It can&apos;t be undone.
-              {applicant.editorId && " Their editor account stays."}
+              {applicant.editorId && " They stay on your team as an editor."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -2,15 +2,39 @@ import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import type { Tables } from "@/types/database";
+import type { Enums, Tables } from "@/types/database";
 
-export type CurrentUser = Tables<"profiles">;
+/** The signed-in person's profile, shared by every workspace they're in. */
+export type Account = Tables<"profiles">;
+
+export type Workspace = Tables<"workspaces">;
+
+export type Membership = {
+  workspace: Workspace;
+  role: Enums<"member_role">;
+  status: Enums<"member_status">;
+  announcementsSeenAt: string;
+};
+
+/** How the app treats someone: owners and admins are both "admin". */
+export type AppRole = "admin" | "editor";
+
+export type CurrentUser = Account & {
+  role: AppRole;
+  memberRole: Enums<"member_role">;
+  /** "onboarding" until the workspace approves them (editors only). */
+  memberStatus: Enums<"member_status">;
+  workspace: Workspace;
+  announcementsSeenAt: string;
+  /** Every workspace they can switch to, current one included. */
+  memberships: Membership[];
+};
 
 /**
  * The signed-in user's profile, or null. Memoised per request, so layouts,
  * pages and actions can all call it without extra round trips.
  */
-export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
+export const getAccount = cache(async (): Promise<Account | null> => {
   const supabase = await createClient();
   const { data } = await supabase.auth.getClaims();
   const userId = data?.claims?.sub;
@@ -20,10 +44,69 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   return profile;
 });
 
-/** For pages and actions that need a signed-in user of any role. */
-export async function requireUser(): Promise<CurrentUser> {
+/**
+ * The signed-in user in their current workspace, or null when they aren't
+ * signed in or don't belong to a workspace yet. If their active workspace is
+ * no longer theirs (or was never set), the most recent one they joined takes
+ * its place, since RLS only shows rows from the active workspace.
+ */
+export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
+  const account = await getAccount();
+  if (!account) return null;
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("workspace_members")
+    .select("role, status, joined_at, announcements_seen_at, workspace:workspaces(*)")
+    .eq("user_id", account.id)
+    .in("status", ["onboarding", "active"])
+    .order("joined_at", { ascending: false });
+
+  const memberships: Membership[] = (data ?? []).flatMap((row) =>
+    row.workspace
+      ? [{ workspace: row.workspace, role: row.role, status: row.status, announcementsSeenAt: row.announcements_seen_at }]
+      : [],
+  );
+  if (memberships.length === 0) return null;
+
+  let current = memberships.find((m) => m.workspace.id === account.active_workspace_id);
+  if (!current) {
+    current = memberships[0];
+    const { error } = await supabase.rpc("set_active_workspace", { p_workspace_id: current.workspace.id });
+    if (error) return null;
+  }
+
+  memberships.sort((a, b) => a.workspace.name.localeCompare(b.workspace.name));
+  return {
+    ...account,
+    active_workspace_id: current.workspace.id,
+    role: current.role === "editor" ? "editor" : "admin",
+    memberRole: current.role,
+    memberStatus: current.status,
+    workspace: current.workspace,
+    announcementsSeenAt: current.announcementsSeenAt,
+    memberships,
+  };
+});
+
+/** For pages that only need an account: welcome, joining, passwords. */
+export async function requireAccount(): Promise<Account> {
+  const account = await getAccount();
+  if (!account) redirect("/login");
+  return account;
+}
+
+/**
+ * For pages and actions inside a workspace. People without one go to the
+ * welcome page. Editors still onboarding only get the pages and actions that
+ * opt in with `allowOnboarding`; everything else sends them to Onboarding.
+ * (RLS enforces the same limits on the data.)
+ */
+export async function requireUser({ allowOnboarding = false } = {}): Promise<CurrentUser> {
+  await requireAccount();
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/welcome");
+  if (user.memberStatus === "onboarding" && !allowOnboarding) redirect("/onboarding");
   return user;
 }
 
@@ -35,3 +118,19 @@ export async function requireAdmin(): Promise<CurrentUser> {
 }
 
 export const isAdmin = (user: Pick<CurrentUser, "role">) => user.role === "admin";
+
+/**
+ * Where a just-signed-in person starts: their dashboard, or the welcome page
+ * when they don't belong to a workspace yet (saves a redirect).
+ */
+export async function homePath(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+  const { count } = await supabase
+    .from("workspace_members")
+    .select("workspace_id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .in("status", ["onboarding", "active"]);
+  return count ? "/dashboard" : "/welcome";
+}
+
+/** An editor the workspace hasn't approved yet: limited access. */
+export const isOnboarding = (user: Pick<CurrentUser, "memberStatus">) => user.memberStatus === "onboarding";

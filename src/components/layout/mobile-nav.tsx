@@ -3,22 +3,21 @@
 import * as React from "react";
 import { usePathname } from "next/navigation";
 import { MenuIcon, SettingsIcon } from "lucide-react";
-import { FoundryLogo } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import type { Enums } from "@/types/database";
-import { NavLink, NavList } from "./app-sidebar";
-import { isActivePath } from "./nav-config";
+import { WorkspaceSwitcher } from "@/features/workspaces/components/workspace-switcher";
+import { NavLink, NavList, type SwitcherProps } from "./app-sidebar";
+import { isActivePath, type NavAccess } from "./nav-config";
 
 /** Slide-out navigation for phones and tablets. */
 export function MobileNav({
-  role,
-  onboardingDone,
+  access,
   badges,
+  switcher,
 }: {
-  role: Enums<"user_role">;
-  onboardingDone: boolean;
+  access: NavAccess;
   badges: Record<string, number>;
+  switcher: SwitcherProps;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = React.useState(false);
@@ -32,14 +31,12 @@ export function MobileNav({
         </Button>
       </SheetTrigger>
       <SheetContent side="left" className="flex w-72 flex-col gap-0 bg-sidebar p-0">
-        <SheetHeader className="h-14 justify-center px-5">
-          <SheetTitle asChild>
-            <FoundryLogo />
-          </SheetTitle>
+        <SheetHeader className="h-14 justify-center px-3">
+          <SheetTitle className="sr-only">Menu</SheetTitle>
+          <WorkspaceSwitcher {...switcher} />
         </SheetHeader>
         <NavList
-          role={role}
-          onboardingDone={onboardingDone}
+          access={access}
           badges={badges}
           onNavigate={close}
           itemClassName="h-11"

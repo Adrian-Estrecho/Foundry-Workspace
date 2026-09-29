@@ -40,9 +40,12 @@ const COLUMNS = CLIENT_STAGES.map((stage) => ({ id: stage.value, label: stage.la
 export function ClientPipeline({
   clients,
   editors,
+  intakeUrl,
   today,
 }: {
   clients: PipelineClient[];
+  /** This workspace's public project form. */
+  intakeUrl: string;
   editors: EditorOption[];
   today: string;
 }) {
@@ -87,7 +90,7 @@ export function ClientPipeline({
 
   const copyIntakeLink = async () => {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/intake`);
+      await navigator.clipboard.writeText(intakeUrl);
       toast.success("Intake form link copied");
     } catch {
       toast.error("Couldn't copy the link.");

@@ -15,6 +15,7 @@ import { firstName } from "@/lib/utils";
 import { ActivityFeed } from "./activity-feed";
 import { CompletedBars } from "./completed-bars";
 import { Deadlines } from "./deadlines";
+import { GettingStarted, type SetupProgress } from "./getting-started";
 import { GrowTeamCard } from "./grow-team-card";
 import { HoursChart } from "./hours-chart";
 import { OnlineKpi } from "./online-kpi";
@@ -24,7 +25,7 @@ import { WhosWorking } from "./whos-working";
 type Data = Awaited<ReturnType<typeof getAdminDashboard>>;
 
 /** "What's happening in my company right now?" */
-export function AdminDashboard({ user, data }: { user: CurrentUser; data: Data }) {
+export function AdminDashboard({ user, data, setup }: { user: CurrentUser; data: Data; setup: SetupProgress }) {
   const { kpis } = data;
 
   return (
@@ -34,8 +35,10 @@ export function AdminDashboard({ user, data }: { user: CurrentUser; data: Data }
 
       <PageHeader
         title={`${greeting(data.timeZone)}, ${firstName(user.full_name)}`}
-        description="Here's what's happening at Foundry Media right now."
+        description={`Here's what's happening at ${user.workspace.name} right now.`}
       />
+
+      <GettingStarted setup={setup} />
 
       {/* Scrolls sideways on phones; wraps on desktop. */}
       <div className="-mx-4 mb-5 overflow-x-auto px-4 pb-1 scrollbar-none sm:-mx-6 sm:px-6 lg:mx-0 lg:overflow-visible lg:px-0 lg:pb-0">
@@ -68,6 +71,7 @@ export function AdminDashboard({ user, data }: { user: CurrentUser; data: Data }
           <div className="grid gap-5 md:grid-cols-5">
             <GrowTeamCard
               className="md:col-span-2"
+              slug={user.workspace.slug}
               applicants={data.applicants}
               newApplicants={kpis.newApplicants}
             />

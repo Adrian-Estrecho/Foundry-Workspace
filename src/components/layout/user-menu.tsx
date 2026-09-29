@@ -31,7 +31,7 @@ export function UserMenu({ name, email, role, avatarUrl }: UserMenuProps) {
         <DropdownMenuLabel className="font-normal">
           <span className="block truncate font-medium">{name}</span>
           <span className="block truncate text-xs text-muted-foreground">
-            {email} · <span className="capitalize">{role}</span>
+            {email} · {role}
           </span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />

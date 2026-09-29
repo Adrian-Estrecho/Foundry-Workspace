@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
+  ArrowLeftRightIcon,
   BriefcaseBusinessIcon,
   FolderKanbanIcon,
   ListChecksIcon,
@@ -28,18 +29,20 @@ import {
   CommandSeparator,
   CommandShortcut,
 } from "@/components/ui/command";
+import { switchWorkspace } from "@/features/workspaces/actions";
 import { createClient } from "@/lib/supabase/client";
-import type { Enums } from "@/types/database";
-import { navFor } from "./nav-config";
+import type { SwitcherProps } from "./app-sidebar";
+import { navFor, type NavAccess } from "./nav-config";
 
 const noopSubscribe = () => () => {};
 
 /**
- * Global command palette (Ctrl+K / ⌘K). Jump anywhere, switch theme, sign out.
- * Everyone can jump to their open tasks and projects; admins also to any
- * client, editor or applicant.
+ * Global command palette (Ctrl+K / ⌘K). Jump anywhere, switch workspace or
+ * theme, sign out. Full members can jump to their open tasks and projects;
+ * admins also to any client, editor or applicant.
  */
-export function CommandMenu({ role, onboardingDone }: { role: Enums<"user_role">; onboardingDone: boolean }) {
+export function CommandMenu({ access, switcher }: { access: NavAccess; switcher: SwitcherProps }) {
+  const { role, onboarding } = access;
   const [open, setOpen] = React.useState(false);
   const isMac = React.useSyncExternalStore(
     noopSubscribe,
@@ -48,16 +51,17 @@ export function CommandMenu({ role, onboardingDone }: { role: Enums<"user_role">
   );
   const router = useRouter();
   const { resolvedTheme, setTheme } = useTheme();
-  const items = navFor(role, { onboardingDone });
+  const items = navFor(access);
+  const otherWorkspaces = switcher.workspaces.filter((w) => w.id !== switcher.current.id);
   const [clients, setClients] = React.useState<{ id: string; name: string; contact: string }[]>([]);
   const [editors, setEditors] = React.useState<{ id: string; name: string }[]>([]);
   const [applicants, setApplicants] = React.useState<{ id: string; name: string }[]>([]);
   const [projects, setProjects] = React.useState<{ id: string; name: string }[]>([]);
   const [tasks, setTasks] = React.useState<{ id: string; title: string; project: string | null; isTrial: boolean }[]>([]);
 
-  // Projects and open tasks, for everyone (RLS gives editors their own).
+  // Projects and open tasks, for full members (RLS gives editors their own).
   React.useEffect(() => {
-    if (!open) return;
+    if (!open || onboarding) return;
     let cancelled = false;
     const supabase = createClient();
     void Promise.all([
@@ -76,7 +80,7 @@ export function CommandMenu({ role, onboardingDone }: { role: Enums<"user_role">
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, onboarding]);
 
   // Load records each time the palette opens, so new leads and applicants are searchable.
   React.useEffect(() => {
@@ -86,7 +90,7 @@ export function CommandMenu({ role, onboardingDone }: { role: Enums<"user_role">
     void Promise.all([
       supabase.from("clients").select("id, company, contact_name").order("company"),
       supabase.from("editors").select("id, profile:profiles!editors_id_fkey(full_name)"),
-      supabase.from("applicants").select("id, full_name").not("stage", "in", "(approved,rejected)").order("full_name"),
+      supabase.from("applicants").select("id, full_name").not("stage", "in", "(joined,rejected)").order("full_name"),
     ]).then(([clientRows, editorRows, applicantRows]) => {
       if (cancelled) return;
       setClients((clientRows.data ?? []).map((c) => ({ id: c.id, name: c.company?.trim() || c.contact_name, contact: c.contact_name })));
@@ -132,7 +136,7 @@ export function CommandMenu({ role, onboardingDone }: { role: Enums<"user_role">
         </kbd>
       </button>
 
-      <CommandDialog open={open} onOpenChange={setOpen} title="Search Foundry" description="Jump to a page or run a command">
+      <CommandDialog open={open} onOpenChange={setOpen} title={`Search ${switcher.current.name}`} description="Jump to a page or run a command">
         <Command>
           <CommandInput placeholder="Where do you want to go?" />
           <CommandList>
@@ -231,6 +235,24 @@ export function CommandMenu({ role, onboardingDone }: { role: Enums<"user_role">
                     >
                       <UserPlusIcon />
                       {applicant.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </>
+            )}
+            {otherWorkspaces.length > 0 && (
+              <>
+                <CommandSeparator />
+                <CommandGroup heading="Switch workspace">
+                  {otherWorkspaces.map((workspace) => (
+                    <CommandItem
+                      key={workspace.id}
+                      value={`switch workspace ${workspace.name}`}
+                      onSelect={() => run(() => void switchWorkspace(workspace.id))}
+                    >
+                      <ArrowLeftRightIcon />
+                      {workspace.name}
+                      <span className="text-muted-foreground">{workspace.label}</span>
                     </CommandItem>
                   ))}
                 </CommandGroup>

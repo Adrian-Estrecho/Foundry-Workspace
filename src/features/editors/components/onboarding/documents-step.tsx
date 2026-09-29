@@ -16,10 +16,13 @@ const ACCEPT = ["application/pdf", "image/png", "image/jpeg"];
 type Doc = { id: string; doc_type: string; file_name: string; url: string | null };
 
 export function DocumentsStep({
+  workspaceId,
   editorId,
   documents,
   templatesUrl,
 }: {
+  /** Uploads are stored under editor-docs/<workspace id>/<editor id>/. */
+  workspaceId: string;
   editorId: string;
   documents: Doc[];
   templatesUrl: string | null;
@@ -37,6 +40,7 @@ export function DocumentsStep({
         {DOC_TYPES.map((type) => (
           <DocumentSlot
             key={type.value}
+            workspaceId={workspaceId}
             editorId={editorId}
             docType={type.value}
             label={type.label}
@@ -48,7 +52,19 @@ export function DocumentsStep({
   );
 }
 
-function DocumentSlot({ editorId, docType, label, doc }: { editorId: string; docType: DocType; label: string; doc: Doc | null }) {
+function DocumentSlot({
+  workspaceId,
+  editorId,
+  docType,
+  label,
+  doc,
+}: {
+  workspaceId: string;
+  editorId: string;
+  docType: DocType;
+  label: string;
+  doc: Doc | null;
+}) {
   const router = useRouter();
   const input = React.useRef<HTMLInputElement>(null);
   const [busy, setBusy] = React.useState(false);
@@ -63,7 +79,7 @@ function DocumentSlot({ editorId, docType, label, doc }: { editorId: string; doc
     setBusy(true);
     try {
       const safeName = file.name.replace(/[^\w.-]+/g, "-").slice(-80);
-      const path = `${editorId}/${docType}-${Date.now()}-${safeName}`;
+      const path = `${workspaceId}/${editorId}/${docType}-${Date.now()}-${safeName}`;
       const { error } = await createClient().storage.from("editor-docs").upload(path, file, { contentType: file.type });
       if (error) throw new Error(error.message);
       const result = await recordDocument(docType, path, file.name);

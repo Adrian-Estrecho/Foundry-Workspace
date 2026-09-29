@@ -13,9 +13,31 @@ import { timeAgo } from "@/lib/dates";
 import type { Enums, Json } from "@/types/database";
 import { acknowledgeSop } from "../../onboarding-actions";
 
-type Sop = { id: string; title: string; category: Enums<"sop_category">; content: Json; acknowledgedAt: string | null };
+type Sop = {
+  id: string;
+  title: string;
+  category: Enums<"sop_category">;
+  content: Json;
+  acknowledgedAt: string | null;
+  /** Shown as a tag in the SOP library (everything in onboarding is required). */
+  required?: boolean;
+};
 
-export function SopsStep({ sops, renderedAt }: { sops: Sop[]; renderedAt: number }) {
+/**
+ * SOPs to open and read. Editors mark each as read ("acknowledge"); admins
+ * (`canAcknowledge` false) just read them.
+ */
+export function SopsStep({
+  sops,
+  renderedAt,
+  canAcknowledge = true,
+  emptyText = "There are no required SOPs right now.",
+}: {
+  sops: Sop[];
+  renderedAt: number;
+  canAcknowledge?: boolean;
+  emptyText?: string;
+}) {
   const router = useRouter();
   const [openId, setOpenId] = React.useState<string | null>(null);
   const [pending, startTransition] = React.useTransition();
@@ -27,13 +49,13 @@ export function SopsStep({ sops, renderedAt }: { sops: Sop[]; renderedAt: number
       if (!result.ok) return void toast.error(result.error);
       toast.success(`Marked “${sop.title}” as read`);
       // Open the next one still to read, if any.
-      const next = sops.find((s) => s.id !== sop.id && !s.acknowledgedAt);
+      const next = sops.find((s) => s.id !== sop.id && !s.acknowledgedAt && s.required !== false);
       setOpenId(next?.id ?? null);
       router.refresh();
     });
 
   if (sops.length === 0) {
-    return <p className="text-sm text-muted-foreground">There are no required SOPs right now.</p>;
+    return <p className="text-sm text-muted-foreground">{emptyText}</p>;
   }
 
   return (
@@ -51,14 +73,23 @@ export function SopsStep({ sops, renderedAt }: { sops: Sop[]; renderedAt: number
               {sop.acknowledgedAt ? <CheckCircle2Icon className="size-5" /> : <BookOpenIcon className="size-5" />}
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium">{sop.title}</span>
+              <span className="flex items-center gap-2">
+                <span className="truncate text-sm font-medium">{sop.title}</span>
+                {sop.required && (
+                  <span className="shrink-0 rounded-full bg-primary/12 px-2 py-0.5 text-xs font-medium text-primary">Required</span>
+                )}
+              </span>
               <span className="block text-xs text-muted-foreground">
                 {SOP_CATEGORY_LABEL[sop.category]}
                 {sop.acknowledgedAt && ` · Read ${timeAgo(sop.acknowledgedAt, renderedAt)}`}
               </span>
             </span>
-            <Button size="sm" variant={sop.acknowledgedAt ? "ghost" : "default"} onClick={() => setOpenId(sop.id)}>
-              {sop.acknowledgedAt ? "Open" : "Read"}
+            <Button
+              size="sm"
+              variant={sop.acknowledgedAt || !canAcknowledge ? "ghost" : "default"}
+              onClick={() => setOpenId(sop.id)}
+            >
+              {sop.acknowledgedAt || !canAcknowledge ? "Open" : "Read"}
             </Button>
           </li>
         ))}
@@ -75,7 +106,7 @@ export function SopsStep({ sops, renderedAt }: { sops: Sop[]; renderedAt: number
               <SopContent content={open.content} />
             </ScrollArea>
             <DialogFooter>
-              {open.acknowledgedAt ? (
+              {open.acknowledgedAt || !canAcknowledge ? (
                 <Button variant="ghost" onClick={() => setOpenId(null)}>
                   Close
                 </Button>
