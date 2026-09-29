@@ -36,7 +36,7 @@ export function WorkspaceForm({ workspace, siteUrl }: { workspace: Workspace; si
   const host = siteUrl.replace(/^https?:\/\//, "");
 
   return (
-    <Panel title="Workspace" description={`Owners and admins only. Applies to everyone in ${workspace.name}.`}>
+    <Panel title="General" description="Name, public links, onboarding resources and defaults.">
       <form onSubmit={submitWith(save)} className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <FormRow label="Workspace name" error={fieldErrors.name}>
           <Input name="name" defaultValue={workspace.name} maxLength={60} required />

@@ -1,5 +1,6 @@
 import {
   BookOpenIcon,
+  Building2Icon,
   BriefcaseBusinessIcon,
   Clock3Icon,
   FolderKanbanIcon,
@@ -38,6 +39,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/attendance", label: "Attendance", icon: Clock3Icon, roles: ["admin", "editor"], section: "Work" },
   { href: "/messages", label: "Messages", icon: MessagesSquareIcon, roles: ["admin", "editor"], section: "Company" },
   { href: "/sops", label: "SOPs", icon: BookOpenIcon, roles: ["admin", "editor"], section: "Company", duringOnboarding: true },
+  { href: "/workspace", label: "Workspace", icon: Building2Icon, roles: ["admin"], section: "Company" },
 ];
 
 /**

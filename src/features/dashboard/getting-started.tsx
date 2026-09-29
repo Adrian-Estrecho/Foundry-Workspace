@@ -34,7 +34,7 @@ export function GettingStarted({ setup }: { setup: SetupProgress }) {
       text: "Contract and NDA, Frame.io invite and asset pack, for new editors.",
       action: (
         <Button asChild size="sm" variant="secondary" className="bg-surface ring-1 ring-border">
-          <Link href="/settings">Open settings</Link>
+          <Link href="/workspace">Open workspace</Link>
         </Button>
       ),
     },
@@ -44,7 +44,7 @@ export function GettingStarted({ setup }: { setup: SetupProgress }) {
       text: "Every editor who joins gets it straight away.",
       action: (
         <Button asChild size="sm" variant="secondary" className="bg-surface ring-1 ring-border">
-          <Link href="/settings#hiring">Set it up</Link>
+          <Link href="/workspace#hiring">Set it up</Link>
         </Button>
       ),
     },
