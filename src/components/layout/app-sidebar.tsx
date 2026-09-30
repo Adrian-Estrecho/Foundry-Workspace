@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { LogOutIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, SettingsIcon } from "lucide-react";
 import { signOut } from "@/app/(auth)/actions";
@@ -153,7 +153,7 @@ export function NavLink({
       aria-current={active ? "page" : undefined}
     >
       <span className="relative">
-        <Icon className={cn("size-4.5 shrink-0", active && "text-primary")} />
+        <NavIcon icon={Icon} active={active} />
         {!!badge && !expanded && (
           <span className="absolute -top-1 -right-1 size-2 rounded-full bg-primary ring-2 ring-sidebar" />
         )}
@@ -169,6 +169,16 @@ export function NavLink({
       <TooltipContent side="right">{label}</TooltipContent>
     </Tooltip>
   );
+}
+
+/**
+ * A nav link's icon. It pulses while the page is on its way, which only
+ * happens when the click beat the prefetch (otherwise the page's loading
+ * skeleton shows at once).
+ */
+function NavIcon({ icon: Icon, active }: { icon: NavItem["icon"]; active: boolean }) {
+  const { pending } = useLinkStatus();
+  return <Icon className={cn("size-4.5 shrink-0", (active || pending) && "text-primary", pending && "animate-pulse")} />;
 }
 
 function NavButton({

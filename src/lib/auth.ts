@@ -31,18 +31,31 @@ export type CurrentUser = Account & {
 };
 
 /**
- * The signed-in user's profile, or null. Memoised per request, so layouts,
- * pages and actions can all call it without extra round trips.
+ * The signed-in user's profile with all their memberships, in one round trip.
+ * Memoised per request, so layouts, pages and actions can all call it.
  */
-export const getAccount = cache(async (): Promise<Account | null> => {
+const getSession = cache(async () => {
   const supabase = await createClient();
   const { data } = await supabase.auth.getClaims();
   const userId = data?.claims?.sub;
   if (!userId) return null;
 
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
-  return profile;
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select(
+      "*, memberships:workspace_members!workspace_members_user_id_fkey(role, status, joined_at, announcements_seen_at, workspace:workspaces(*))",
+    )
+    .eq("id", userId)
+    .maybeSingle();
+  if (!profile) return null;
+  const { memberships, ...account } = profile;
+  return { account, memberships };
 });
+
+/** The signed-in user's profile, or null. */
+export async function getAccount(): Promise<Account | null> {
+  return (await getSession())?.account ?? null;
+}
 
 /**
  * The signed-in user in their current workspace, or null when they aren't
@@ -51,27 +64,25 @@ export const getAccount = cache(async (): Promise<Account | null> => {
  * its place, since RLS only shows rows from the active workspace.
  */
 export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
-  const account = await getAccount();
-  if (!account) return null;
+  const session = await getSession();
+  if (!session) return null;
+  const { account } = session;
 
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("workspace_members")
-    .select("role, status, joined_at, announcements_seen_at, workspace:workspaces(*)")
-    .eq("user_id", account.id)
-    .in("status", ["onboarding", "active"])
-    .order("joined_at", { ascending: false });
-
-  const memberships: Membership[] = (data ?? []).flatMap((row) =>
-    row.workspace
-      ? [{ workspace: row.workspace, role: row.role, status: row.status, announcementsSeenAt: row.announcements_seen_at }]
-      : [],
-  );
+  // Newest first, so a fallback workspace is the one they joined last.
+  const memberships: Membership[] = session.memberships
+    .filter((row) => row.status === "onboarding" || row.status === "active")
+    .sort((a, b) => Date.parse(b.joined_at) - Date.parse(a.joined_at))
+    .flatMap((row) =>
+      row.workspace
+        ? [{ workspace: row.workspace, role: row.role, status: row.status, announcementsSeenAt: row.announcements_seen_at }]
+        : [],
+    );
   if (memberships.length === 0) return null;
 
   let current = memberships.find((m) => m.workspace.id === account.active_workspace_id);
   if (!current) {
     current = memberships[0];
+    const supabase = await createClient();
     const { error } = await supabase.rpc("set_active_workspace", { p_workspace_id: current.workspace.id });
     if (error) return null;
   }
