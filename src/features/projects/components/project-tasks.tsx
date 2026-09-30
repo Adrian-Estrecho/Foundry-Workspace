@@ -1,10 +1,12 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { ListTodoIcon, PlusIcon } from "lucide-react";
 import { EmptyState } from "@/components/shared/panel";
 import { Segmented } from "@/components/shared/segmented";
 import { Button } from "@/components/ui/button";
+import { ClickUpMark } from "@/features/clickup/components/clickup-mark";
 import { RECENT_DONE_DAYS, type TaskStatusDef } from "@/features/tasks/constants";
 import type { TaskFormOptions, TaskSummary } from "@/features/tasks/queries";
 import { TaskBoard } from "@/features/tasks/components/task-board";
@@ -40,6 +42,18 @@ export function ProjectTasks({
     [tasks, doneSince],
   );
   const olderDone = tasks.length - onBoard.length;
+  // Fed by a ClickUp List: tasks are added in ClickUp.
+  const fromClickUp = options?.projects.find((p) => p.id === projectId)?.clickup ?? false;
+  const addTask = (label?: string) =>
+    fromClickUp ? (
+      <Button asChild variant="secondary" className="bg-surface ring-1 ring-border">
+        <Link href="/workspace/clickup">
+          <ClickUpMark /> Synced from ClickUp
+        </Link>
+      </Button>
+    ) : (
+      <NewTask projectId={projectId} label={label} />
+    );
 
   return (
     <TaskWorkspace isAdmin={isAdmin} today={today} options={options} statuses={statuses}>
@@ -61,7 +75,7 @@ export function ProjectTasks({
             ]}
           />
           <TaskStatusesButton />
-          {isAdmin && <NewTask projectId={projectId} />}
+          {isAdmin && addTask()}
         </div>
 
         {tasks.length === 0 ? (
@@ -69,13 +83,19 @@ export function ProjectTasks({
             <EmptyState
               icon={ListTodoIcon}
               title="No tasks yet"
-              description={isAdmin ? "Break the project into tasks and assign them to editors." : "Tasks assigned to you on this project show up here."}
-              action={isAdmin ? <NewTask projectId={projectId} label="Add the first task" /> : undefined}
+              description={
+                isAdmin
+                  ? fromClickUp
+                    ? "Tasks show up here when they reach the start status in ClickUp."
+                    : "Break the project into tasks and assign them to editors."
+                  : "Tasks assigned to you on this project show up here."
+              }
+              action={isAdmin ? addTask("Add the first task") : undefined}
             />
           </div>
         ) : view === "board" ? (
           <>
-            <TaskBoard tasks={onBoard} draft={{ projectId }} />
+            <TaskBoard tasks={onBoard} draft={{ projectId }} addTasks={!fromClickUp} />
             {olderDone > 0 && (
               <p className="-mt-3 text-xs text-muted-foreground">
                 Done shows the last {RECENT_DONE_DAYS} days.{" "}

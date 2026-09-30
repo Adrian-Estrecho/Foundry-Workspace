@@ -24,6 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ClickUpMark } from "@/features/clickup/components/clickup-mark";
 import { StatusDot } from "@/features/statuses/components/status-chip";
 import type { StatusBadge } from "@/features/statuses/constants";
 import type { TaskStatus, TaskStatusDef } from "../../constants";
@@ -34,12 +35,15 @@ export function TaskHeader({
   task,
   context,
   canWork,
+  clickupUrl,
 }: {
   task: Required<Omit<TaskDraft, "id">> & { id: string; isTrial: boolean; statusInfo: StatusBadge };
   /** Breadcrumb above the title: client and project links. */
   context: React.ReactNode;
   /** The signed-in editor is the assignee (editors only). */
   canWork: boolean;
+  /** Synced from ClickUp: it's edited and deleted there. */
+  clickupUrl: string | null;
 }) {
   const router = useRouter();
   const workspace = useTaskWorkspace();
@@ -124,7 +128,14 @@ export function TaskHeader({
               )}
             </DropdownMenuContent>
           </DropdownMenu>
-          {workspace.isAdmin && (
+          {clickupUrl && (
+            <Button asChild variant="outline" size="lg">
+              <a href={clickupUrl} target="_blank" rel="noreferrer">
+                <ClickUpMark /> Open in ClickUp
+              </a>
+            </Button>
+          )}
+          {workspace.isAdmin && !clickupUrl && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon-lg" aria-label="More actions">

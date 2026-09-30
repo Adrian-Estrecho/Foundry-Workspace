@@ -123,6 +123,8 @@ export async function deleteTask(id: string): Promise<ActionResult> {
   if (!idSchema.safeParse(id).success) return fail("Invalid task.");
 
   const supabase = await createClient();
+  const { data: task } = await supabase.from("tasks").select("clickup_task_id").eq("id", id).maybeSingle();
+  if (task?.clickup_task_id) return fail("This task comes from ClickUp. Delete or archive it there and it goes from here too.");
   const { data: files } = await supabase.from("task_attachments").select("storage_path").eq("task_id", id).eq("kind", "file");
   const { data, error } = await supabase.from("tasks").delete().eq("id", id).select("project_id").maybeSingle();
   if (error) return fail(dbError(error));

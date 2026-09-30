@@ -17,9 +17,20 @@ type BoardTask = TaskSummary & { column: string };
  * Kanban with a column per status, in the workspace's order (To Do → … →
  * Done by default). Admins can drop anywhere (entering Revisions asks what to
  * change) and add statuses; editors move their own tasks up to the For
- * Review stage.
+ * Review stage. `addTasks` is off where tasks are added elsewhere (a
+ * project synced from ClickUp).
  */
-export function TaskBoard({ tasks, draft, emptyText }: { tasks: TaskSummary[]; draft?: TaskDraft; emptyText?: string }) {
+export function TaskBoard({
+  tasks,
+  draft,
+  emptyText,
+  addTasks = true,
+}: {
+  tasks: TaskSummary[];
+  draft?: TaskDraft;
+  emptyText?: string;
+  addTasks?: boolean;
+}) {
   const workspace = useTaskWorkspace();
   const items = React.useMemo<BoardTask[]>(() => tasks.map((task) => ({ ...task, column: task.statusInfo.id })), [tasks]);
 
@@ -28,7 +39,7 @@ export function TaskBoard({ tasks, draft, emptyText }: { tasks: TaskSummary[]; d
     label: status.name,
     dot: statusColor(status.color).dot,
     action:
-      workspace.isAdmin && status.stage !== "done" ? (
+      workspace.isAdmin && addTasks && status.stage !== "done" ? (
         <Button
           variant="ghost"
           size="icon-xs"

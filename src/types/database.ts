@@ -323,6 +323,234 @@ export type Database = {
           },
         ];
       };
+      clickup_connections: {
+        Row: {
+          account_email: string | null;
+          account_name: string;
+          connected_at: string;
+          connected_by: string | null;
+          last_error: string | null;
+          last_error_at: string | null;
+          last_event_at: string | null;
+          team_id: string;
+          team_name: string;
+          timezone: string;
+          webhook_id: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          account_email?: string | null;
+          account_name: string;
+          connected_at?: string;
+          connected_by?: string | null;
+          last_error?: string | null;
+          last_error_at?: string | null;
+          last_event_at?: string | null;
+          team_id: string;
+          team_name: string;
+          timezone?: string;
+          webhook_id?: string | null;
+          workspace_id?: string;
+        };
+        Update: {
+          account_email?: string | null;
+          account_name?: string;
+          connected_at?: string;
+          connected_by?: string | null;
+          last_error?: string | null;
+          last_error_at?: string | null;
+          last_event_at?: string | null;
+          team_id?: string;
+          team_name?: string;
+          timezone?: string;
+          webhook_id?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "clickup_connections_connected_by_fkey";
+            columns: ["connected_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "clickup_connections_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: true;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      clickup_outbox: {
+        Row: {
+          attempts: number;
+          last_error: string | null;
+          next_attempt_at: string;
+          queued_at: string;
+          status_id: string;
+          task_id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          attempts?: number;
+          last_error?: string | null;
+          next_attempt_at?: string;
+          queued_at?: string;
+          status_id: string;
+          task_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          attempts?: number;
+          last_error?: string | null;
+          next_attempt_at?: string;
+          queued_at?: string;
+          status_id?: string;
+          task_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "clickup_outbox_task_id_fkey";
+            columns: ["task_id"];
+            isOneToOne: true;
+            referencedRelation: "tasks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "clickup_outbox_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      clickup_pipelines: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          last_synced_at: string | null;
+          list_id: string;
+          list_name: string;
+          project_id: string;
+          start_status: string;
+          statuses: NonNullable<Json>;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          last_synced_at?: string | null;
+          list_id: string;
+          list_name: string;
+          project_id: string;
+          start_status: string;
+          statuses?: NonNullable<Json>;
+          workspace_id?: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          last_synced_at?: string | null;
+          list_id?: string;
+          list_name?: string;
+          project_id?: string;
+          start_status?: string;
+          statuses?: NonNullable<Json>;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "clickup_pipelines_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "clickup_pipelines_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: true;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "clickup_pipelines_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "clickup_connections";
+            referencedColumns: ["workspace_id"];
+          },
+        ];
+      };
+      clickup_secrets: {
+        Row: {
+          api_token: string;
+          webhook_secret: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          api_token: string;
+          webhook_secret?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          api_token?: string;
+          webhook_secret?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "clickup_secrets_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: true;
+            referencedRelation: "clickup_connections";
+            referencedColumns: ["workspace_id"];
+          },
+        ];
+      };
+      clickup_status_map: {
+        Row: {
+          clickup_status: string;
+          needs_review: boolean;
+          status_id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          clickup_status: string;
+          needs_review?: boolean;
+          status_id: string;
+          workspace_id?: string;
+        };
+        Update: {
+          clickup_status?: string;
+          needs_review?: boolean;
+          status_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "clickup_status_map_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "clickup_connections";
+            referencedColumns: ["workspace_id"];
+          },
+          {
+            foreignKeyName: "clickup_status_map_workspace_id_status_id_fkey";
+            columns: ["workspace_id", "status_id"];
+            isOneToOne: false;
+            referencedRelation: "task_statuses";
+            referencedColumns: ["workspace_id", "id"];
+          },
+        ];
+      };
       client_checklist_items: {
         Row: {
           client_id: string;
@@ -2050,6 +2278,7 @@ export type Database = {
         Row: {
           assigned_at: string | null;
           assignee_id: string | null;
+          clickup_task_id: string | null;
           completed_at: string | null;
           created_at: string;
           created_by: string | null;
@@ -2074,6 +2303,7 @@ export type Database = {
         Insert: {
           assigned_at?: string | null;
           assignee_id?: string | null;
+          clickup_task_id?: string | null;
           completed_at?: string | null;
           created_at?: string;
           created_by?: string | null;
@@ -2098,6 +2328,7 @@ export type Database = {
         Update: {
           assigned_at?: string | null;
           assignee_id?: string | null;
+          clickup_task_id?: string | null;
           completed_at?: string | null;
           created_at?: string;
           created_by?: string | null;
@@ -2580,6 +2811,7 @@ export type Database = {
           workspace_name: string;
         }[];
       };
+      clickup_status_for: { Args: { p_project_id: string; p_status_id: string }; Returns: string };
       client_display_name: { Args: { p_company: string; p_contact_name: string }; Returns: string };
       client_stage_label: {
         Args: { p_stage: Database["public"]["Enums"]["client_stage"] };
@@ -2596,6 +2828,19 @@ export type Database = {
         Returns: undefined;
       };
       delete_task_status: { Args: { p_move_to?: string; p_status_id: string }; Returns: undefined };
+      due_clickup_pushes: {
+        Args: { p_limit?: number };
+        Returns: {
+          attempts: number;
+          clickup_status: string;
+          clickup_task_id: string;
+          list_name: string;
+          status_id: string;
+          task_id: string;
+          title: string;
+          workspace_id: string;
+        }[];
+      };
       editor_hours: {
         Args: { p_from: string; p_to: string; p_tz?: string };
         Returns: {
@@ -2710,6 +2955,7 @@ export type Database = {
       };
       reject_member: { Args: { p_user_id: string }; Returns: undefined };
       reorder_statuses: { Args: { p_ids: string[]; p_kind: string }; Returns: undefined };
+      request_clickup_push: { Args: Record<PropertyKey, never>; Returns: undefined };
       request_notification_emails: { Args: Record<PropertyKey, never>; Returns: undefined };
       resume_work: { Args: { p_keep_task?: boolean; p_task_id?: string }; Returns: undefined };
       run_scheduled_alerts: { Args: Record<PropertyKey, never>; Returns: undefined };

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CheckSquareIcon, GraduationCapIcon, MessageSquareIcon, PaperclipIcon, RotateCcwIcon } from "lucide-react";
 import { UserAvatar } from "@/components/shared/user-avatar";
+import { ClickUpMark } from "@/features/clickup/components/clickup-mark";
 import { cn } from "@/lib/utils";
 import type { TaskSummary } from "../queries";
 import { DueChip, PriorityFlag, TaskStatusChip } from "./task-bits";
@@ -47,6 +48,7 @@ export function TaskCard({
         <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
           {task.isTrial && <GraduationCapIcon className="size-3 shrink-0 text-primary" />}
           <span className="truncate">{taskContext(task)}</span>
+          {task.clickupUrl && <ClickUpMark className="ml-auto size-3.5" title="From ClickUp" />}
         </p>
         <p className={cn("mt-0.5 line-clamp-2 leading-snug font-medium", done && "text-muted-foreground line-through decoration-muted-foreground/40")}>
           {task.title}

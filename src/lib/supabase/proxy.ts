@@ -6,8 +6,9 @@ import { safeNextPath } from "@/lib/utils";
 import type { Database } from "@/types/database";
 
 /** Paths reachable without signing in. */
-// /portal is a client's private link; /api/jobs checks its own shared secret.
-const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth", "/intake", "/apply", "/thanks", "/portal", "/api/jobs"];
+// /portal is a client's private link; /api/jobs checks its own shared secret and
+// /api/webhooks the sender's signature.
+const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth", "/intake", "/apply", "/thanks", "/portal", "/api/jobs", "/api/webhooks"];
 
 const isPublicPath = (path: string) =>
   PUBLIC_PATHS.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));

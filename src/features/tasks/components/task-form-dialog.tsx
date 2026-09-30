@@ -106,15 +106,20 @@ export function TaskFormDialog({
             />
           </FormRow>
 
-          <FormRow label="Project" error={errors.project_id}>
+          <FormRow
+            label="Project"
+            error={errors.project_id}
+            hint={projects.some((p) => p.clickup) ? "Projects marked ClickUp get their tasks from ClickUp." : undefined}
+          >
             <NativeSelect name="project_id" defaultValue={task.projectId ?? ""}>
               <option value="">No project (internal)</option>
               {[...byClient.entries()].map(([client, list]) => (
                 <optgroup key={client} label={client}>
                   {list.map((project) => (
-                    <option key={project.id} value={project.id}>
+                    <option key={project.id} value={project.id} disabled={project.clickup && project.id !== task.projectId}>
                       {project.name}
                       {project.delivered ? " (delivered)" : ""}
+                      {project.clickup ? " (ClickUp)" : ""}
                     </option>
                   ))}
                 </optgroup>

@@ -4,6 +4,7 @@ import type { StatusBadge, StatusColor } from "@/features/statuses/constants";
 import { getTaskStatuses } from "@/features/statuses/queries";
 import { workspaceAdmins } from "@/features/workspaces/queries";
 import type { CurrentUser } from "@/lib/auth";
+import { clickupTaskUrl } from "@/lib/clickup";
 import { addDays, todayIn } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/server";
 import { one } from "@/lib/utils";
@@ -34,13 +35,16 @@ export type TaskSummary = {
   subtasks: { done: number; total: number };
   comments: number;
   attachments: number;
+  /** Set when the task is synced from ClickUp, which owns what the task is. */
+  clickupUrl: string | null;
 };
 
-export type ProjectOption = { id: string; name: string; clientId: string; clientName: string; delivered: boolean };
+/** `clickup`: the project is fed by a ClickUp List, so its tasks are added there. */
+export type ProjectOption = { id: string; name: string; clientId: string; clientName: string; delivered: boolean; clickup: boolean };
 export type EditorChoice = Person & { isActive: boolean };
 export type TaskFormOptions = { projects: ProjectOption[]; editors: EditorChoice[] };
 
-const TASK_FIELDS = `id, title, status, priority, due_date, position, progress_pct, revision_count, is_trial, completed_at,
+const TASK_FIELDS = `id, title, status, priority, due_date, position, progress_pct, revision_count, is_trial, completed_at, clickup_task_id,
   assignee:editors!tasks_assignee_id_fkey(id, profile:profiles!editors_id_fkey(full_name, avatar_url)),
   project:projects(id, name, client_id),
   subtasks(is_done),
@@ -77,6 +81,7 @@ type TaskRow = {
   revision_count: number;
   is_trial: boolean;
   completed_at: string | null;
+  clickup_task_id: string | null;
   assignee: { id: string; profile: { full_name: string; avatar_url: string | null } | null } | null;
   project: { id: string; name: string; client_id: string } | null;
   subtasks: { is_done: boolean }[];
@@ -117,21 +122,25 @@ async function toSummaries(rows: TaskRow[]): Promise<TaskSummary[]> {
     subtasks: { done: row.subtasks.filter((s) => s.is_done).length, total: row.subtasks.length },
     comments: row.comments[0]?.count ?? 0,
     attachments: row.attachments[0]?.count ?? 0,
+    clickupUrl: row.clickup_task_id ? clickupTaskUrl(row.clickup_task_id) : null,
   }));
 }
 
 /** Projects (newest deadline first, delivered last) and editors, for task forms and filters. */
 export async function getTaskFormOptions(): Promise<TaskFormOptions> {
   const supabase = await createClient();
-  const [{ data: projects }, { data: editors }] = await Promise.all([
+  const [{ data: projects }, { data: editors }, { data: pipelines }] = await Promise.all([
     supabase.from("projects").select("id, name, status, client_id, created_at").order("created_at", { ascending: false }),
     // Approved editors only: people still onboarding can't be given work.
     supabase
       .from("editors")
       .select("id, is_active, profile:profiles!editors_id_fkey(full_name, avatar_url), member:workspace_members!editors_member_fkey!inner(status)")
       .eq("member.status", "active"),
+    // Admins only (RLS); editors don't get task forms.
+    supabase.from("clickup_pipelines").select("project_id"),
   ]);
   const clients = await clientNames((projects ?? []).map((p) => p.client_id));
+  const linked = new Set((pipelines ?? []).map((p) => p.project_id));
 
   return {
     projects: (projects ?? [])
@@ -141,6 +150,7 @@ export async function getTaskFormOptions(): Promise<TaskFormOptions> {
         clientId: p.client_id,
         clientName: clients.get(p.client_id) ?? "Client",
         delivered: p.status === "delivered",
+        clickup: linked.has(p.id),
       }))
       .sort((a, b) => Number(a.delivered) - Number(b.delivered) || a.clientName.localeCompare(b.clientName) || a.name.localeCompare(b.name)),
     editors: (editors ?? [])

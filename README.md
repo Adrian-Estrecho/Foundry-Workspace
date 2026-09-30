@@ -189,6 +189,15 @@ The contract and NDA templates, Frame.io invite and asset pack links are set in 
 
 Editors hear about new assignments and requested revisions, admins hear when work is ready for review, and anyone @mentioned is notified. Status changes, reassignments and new tasks appear in the activity feed. Reminders and email: see **Notifications and email**.
 
+### ClickUp
+
+- **Workspace → ClickUp** (owners and admins): paste a ClickUp personal API token (ClickUp → avatar → Settings → Apps). ReEdit sees what that person can see, and moves made here show in ClickUp as theirs, so use the owner's or an admin's.
+- **Link a List** (a "pipeline") to a new or existing project. Pick the status where syncing starts (e.g. Ready to edit) and confirm each ClickUp status's stage. ClickUp's statuses become the workspace's task statuses; on the first link they can replace ReEdit's own.
+- Tasks come in once they reach the start status. Tasks already finished (a Done-stage status) and subtasks stay in ClickUp.
+- **ClickUp owns what a task is.** Its title, description, due date, priority and assignee come from ClickUp, and the database won't let anyone change them here. Assignees are matched to editors by email. New tasks for a linked project are added in ClickUp. Subtasks, comments, files and time stay ReEdit-only.
+- **Status goes both ways.** A move here (a drag, Start work, a review) is queued in `clickup_outbox`. The database then calls `/api/jobs/clickup` through `pg_net`, retrying every minute. A move to a status the task's List doesn't have is refused.
+- ClickUp's changes arrive through a webhook at `/api/webhooks/clickup`, registered on connect and checked against its signature. It needs a public `https` address, so locally use **Sync now** on a pipeline, which also catches up on anything missed.
+
 ### Attendance
 
 - **Online / Offline** means ReEdit is open, tracked with Supabase Realtime Presence.
@@ -267,7 +276,7 @@ One hex value is converted to OKLCH (`src/lib/theme.ts`), clamped for contrast i
    select vault.create_secret('https://app.foundrymedia.co', 'foundry_app_url');
    select vault.create_secret('<your JOBS_SECRET>', 'foundry_jobs_secret');
    ```
-   Without them, reminders still appear in the app but no notification emails go out. Vercel's own cron isn't needed (on the Hobby plan it only runs once a day).
+   Without them, reminders still appear in the app but no notification emails go out, and status moves on ClickUp tasks don't reach ClickUp. Vercel's own cron isn't needed (on the Hobby plan it only runs once a day).
 
 ---
 

@@ -19,6 +19,7 @@ import {
   PackageIcon,
   PaletteIcon,
   PencilRulerIcon,
+  PlugIcon,
   UserPlusIcon,
   type LucideIcon,
 } from "lucide-react";
@@ -28,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { ClickUpMark } from "@/features/clickup/components/clickup-mark";
 import { FORM_NAMES, type FormKind } from "@/features/forms/fields";
 import type { Workspace } from "@/lib/auth";
 import { formatDay } from "@/lib/dates";
@@ -35,6 +37,9 @@ import { cn } from "@/lib/utils";
 import { updateHiring, updateWorkspace } from "./actions";
 import { BrandPreview } from "./brand-preview";
 import { LogoUpload } from "./logo-upload";
+
+/** The ClickUp connection at a glance, for the Integrations section. */
+export type ClickUpSummary = { teamName: string; pipelines: number } | null;
 
 /** A public form at a glance, for the Forms section. */
 export type FormSummary = { questions: number; own: number; updatedAt: string | null };
@@ -70,6 +75,7 @@ const SECTIONS = [
   { id: "onboarding", label: "Onboarding", icon: PackageIcon, fields: ["contract_template_url", "frameio_invite_url", "asset_pack_url"] },
   { id: "attendance", label: "Attendance", icon: Clock3Icon, fields: ["missed_clock_in_grace_minutes"] },
   { id: "hiring", label: "Test edit", icon: ClapperboardIcon, fields: TEST_FIELDS },
+  { id: "integrations", label: "Integrations", icon: PlugIcon, fields: [] },
 ] as const satisfies { id: string; label: string; icon: LucideIcon; fields: readonly Field[] }[];
 const SECTION_IDS = SECTIONS.map((s) => s.id);
 
@@ -130,12 +136,14 @@ export function WorkspaceSettings({
   logoUrl,
   siteUrl,
   formSummaries,
+  clickup,
 }: {
   workspace: Workspace;
   template: TestTemplate | null;
   logoUrl: string | null;
   siteUrl: string;
   formSummaries: Record<FormKind, FormSummary>;
+  clickup: ClickUpSummary;
 }) {
   const router = useRouter();
   const formRef = React.useRef<HTMLFormElement>(null);
@@ -221,7 +229,7 @@ export function WorkspaceSettings({
   const linksLive = values.slug === saved.slug;
   const resourcesAdded = RESOURCES.filter((r) => isLink(values[r.field])).length;
   const graceMinutes = Math.min(Math.max(Math.round(Number(values.missed_clock_in_grace_minutes)) || 0, 0), 720);
-  const [brand, links, formsSection, onboarding, attendance, hiring] = SECTIONS;
+  const [brand, links, formsSection, onboarding, attendance, hiring, integrations] = SECTIONS;
 
   return (
     <form
@@ -462,6 +470,30 @@ export function WorkspaceSettings({
                 </span>
               </span>
             </FormRow>
+          </div>
+        </Section>
+
+        <Section
+          section={integrations}
+          className="2xl:col-span-2"
+          description="Tools that feed work into ReEdit."
+          badge={<Badge tone={clickup ? "success" : "muted"}>{clickup ? "ClickUp connected" : "Nothing connected"}</Badge>}
+        >
+          <div className="flex flex-wrap items-center gap-4 rounded-lg bg-surface p-4 ring-1 ring-border">
+            <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary/12 text-primary">
+              <ClickUpMark className="size-5" />
+            </span>
+            <div className="min-w-0 flex-1 basis-48">
+              <p className="text-sm font-medium">ClickUp</p>
+              <p className="text-xs text-muted-foreground">
+                {clickup
+                  ? `${clickup.teamName} · ${clickup.pipelines === 0 ? "no pipelines linked yet" : `${clickup.pipelines} ${clickup.pipelines === 1 ? "pipeline" : "pipelines"} syncing`}`
+                  : "Bring tasks from your ClickUp pipelines in, with ClickUp's statuses."}
+              </p>
+            </div>
+            <Button asChild size="sm" variant={clickup ? "secondary" : "default"} className={cn(clickup && "bg-surface-strong ring-1 ring-border")}>
+              <Link href="/workspace/clickup">{clickup ? "Manage" : "Connect"}</Link>
+            </Button>
           </div>
         </Section>
 

@@ -1,4 +1,3 @@
-import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import {
   notificationEmail,
@@ -8,6 +7,7 @@ import {
 } from "@/features/notifications/emails";
 import { sendEmail } from "@/lib/email";
 import { env } from "@/lib/env";
+import { authorizedJob } from "@/lib/jobs";
 import { workspaceLink } from "@/lib/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { one } from "@/lib/utils";
@@ -19,17 +19,6 @@ import { one } from "@/lib/utils";
  * secret from Vault. Each person gets one email per workspace: the
  * notification itself, or a short digest when there are several.
  */
-
-// Development only: the secret seed.sql stores in the local Vault.
-const LOCAL_SECRET = "foundry-local-jobs-secret";
-
-function authorized(request: Request) {
-  const secret = process.env.JOBS_SECRET || (process.env.NODE_ENV === "development" ? LOCAL_SECRET : "");
-  if (!secret) return false;
-  const given = Buffer.from(request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "");
-  const expected = Buffer.from(secret);
-  return given.length === expected.length && timingSafeEqual(given, expected);
-}
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -162,7 +151,7 @@ async function loadComments(admin: Admin, notifications: ClaimedNotification[]) 
 }
 
 export async function POST(request: Request) {
-  if (!authorized(request)) return new NextResponse("Unauthorized", { status: 401 });
+  if (!authorizedJob(request)) return new NextResponse("Unauthorized", { status: 401 });
 
   const admin = createAdminClient();
   const { data, error } = await admin.rpc("claim_notification_emails", { p_limit: 200 });

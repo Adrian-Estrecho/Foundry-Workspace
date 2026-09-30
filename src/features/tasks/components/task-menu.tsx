@@ -13,6 +13,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ClickUpMark } from "@/features/clickup/components/clickup-mark";
 import { StatusDot } from "@/features/statuses/components/status-chip";
 import { cn } from "@/lib/utils";
 import type { TaskSummary } from "../queries";
@@ -47,6 +48,13 @@ export function TaskMenu({ task, className }: { task: TaskSummary; className?: s
             <ExternalLinkIcon /> Open task
           </Link>
         </DropdownMenuItem>
+        {task.clickupUrl && (
+          <DropdownMenuItem asChild>
+            <a href={task.clickupUrl} target="_blank" rel="noreferrer">
+              <ClickUpMark /> Open in ClickUp
+            </a>
+          </DropdownMenuItem>
+        )}
         {canMove && (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
@@ -69,7 +77,7 @@ export function TaskMenu({ task, className }: { task: TaskSummary; className?: s
             </DropdownMenuSubContent>
           </DropdownMenuSub>
         )}
-        {workspace.isAdmin && (
+        {workspace.isAdmin && !task.clickupUrl && (
           <>
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>

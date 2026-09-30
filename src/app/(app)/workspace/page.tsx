@@ -20,12 +20,11 @@ const summarize = (kind: FormKind, fields: FormField[], updatedAt: string | null
 /** Owner and admin settings that apply to everyone in the workspace. */
 export default async function WorkspacePage() {
   const user = await requireAdmin();
-  const [{ data: template }, forms] = await Promise.all([
-    (await createClient())
-      .from("workspace_settings")
-      .select("test_title, test_brief, test_asset_url, test_due_days")
-      .maybeSingle(),
+  const supabase = await createClient();
+  const [{ data: template }, forms, { data: clickup }] = await Promise.all([
+    supabase.from("workspace_settings").select("test_title, test_brief, test_asset_url, test_due_days").maybeSingle(),
     getWorkspaceForms(),
+    supabase.from("clickup_connections").select("team_name, pipelines:clickup_pipelines(count)").maybeSingle(),
   ]);
   const formSummaries = Object.fromEntries(
     FORM_KINDS.map((kind) => [kind, summarize(kind, forms[kind].fields, forms[kind].updatedAt)]),
@@ -50,6 +49,7 @@ export default async function WorkspacePage() {
         logoUrl={workspaceLogoUrl(user.workspace.logo_path)}
         siteUrl={env.siteUrl}
         formSummaries={formSummaries}
+        clickup={clickup ? { teamName: clickup.team_name, pipelines: clickup.pipelines[0]?.count ?? 0 } : null}
       />
     </div>
   );
