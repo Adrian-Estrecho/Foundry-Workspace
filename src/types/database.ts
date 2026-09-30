@@ -2709,6 +2709,7 @@ export type Database = {
         }[];
       };
       reject_member: { Args: { p_user_id: string }; Returns: undefined };
+      reorder_statuses: { Args: { p_ids: string[]; p_kind: string }; Returns: undefined };
       request_notification_emails: { Args: Record<PropertyKey, never>; Returns: undefined };
       resume_work: { Args: { p_keep_task?: boolean; p_task_id?: string }; Returns: undefined };
       run_scheduled_alerts: { Args: Record<PropertyKey, never>; Returns: undefined };

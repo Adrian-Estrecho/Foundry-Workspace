@@ -18,13 +18,12 @@ const toDef = <Stage extends string>(row: Row<Stage>) => ({
   position: row.position,
 });
 
-/** The workspace's task statuses in board order: by stage, then as arranged. */
+/** The workspace's task statuses in the order admins arranged them (the board's columns). */
 export const getTaskStatuses = cache(async (): Promise<TaskStatusDef[]> => {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("task_statuses")
     .select("id, name, color, stage, position")
-    .order("stage")
     .order("position")
     .order("created_at");
   if (error) throw error;
@@ -36,7 +35,6 @@ export const getProjectStatuses = cache(async (): Promise<ProjectStatusDef[]> =>
   const { data, error } = await supabase
     .from("project_statuses")
     .select("id, name, color, stage, position")
-    .order("stage")
     .order("position")
     .order("created_at");
   if (error) throw error;
@@ -50,13 +48,11 @@ export async function getStatusSettings() {
     supabase
       .from("task_statuses")
       .select("id, name, color, stage, position, tasks(count)")
-      .order("stage")
       .order("position")
       .order("created_at"),
     supabase
       .from("project_statuses")
       .select("id, name, color, stage, position, projects(count)")
-      .order("stage")
       .order("position")
       .order("created_at"),
   ]);

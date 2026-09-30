@@ -11,8 +11,9 @@ import { STATUS_COLOR_KEYS, STATUS_NAME_MAX, type StatusKind } from "./constants
 
 /**
  * Owners and admins manage the workspace's task and project statuses. RLS
- * lets them add and edit; removing goes through delete_*_status, which moves
- * what's in the status first.
+ * lets them add and edit; reordering goes through reorder_statuses (the whole
+ * list at once) and removing through delete_*_status, which moves what's in
+ * the status first.
  */
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
@@ -36,7 +37,7 @@ const revalidateStatuses = () => revalidatePath("/", "layout");
 const valid = (kind: StatusKind, id: string | null) =>
   kindSchema.safeParse(kind).success && (id === null || idSchema.safeParse(id).success);
 
-/** Adds a status (id null) or saves changes to one. New ones go at the end of their stage. */
+/** Adds a status (id null) or saves changes to one. A new one goes after the last status of its stage. */
 export async function saveStatus(kind: StatusKind, id: string | null, formData: FormData): Promise<ActionResult<{ id: string }>> {
   await requireAdmin();
   if (!valid(kind, id)) return fail("Invalid status.");
@@ -56,16 +57,7 @@ export async function saveStatus(kind: StatusKind, id: string | null, formData: 
   const stage = parsed.data.stage as TaskStatus;
 
   const supabase = await createClient();
-  let position: number | undefined;
-  if (id) {
-    const { data: current } = await statusTable(supabase, kind).select("stage").eq("id", id).maybeSingle();
-    if (!current) return fail("That status no longer exists. Refresh and try again.");
-    if (current.stage !== stage) position = await endOfStage(supabase, kind, stage);
-  } else {
-    position = await endOfStage(supabase, kind, stage);
-  }
-
-  const row = { name, color, stage, ...(position !== undefined && { position }) };
+  const row = { name, color, stage, ...(!id && { position: await afterStage(supabase, kind, stage) }) };
   const { data, error } = id
     ? await statusTable(supabase, kind).update(row).eq("id", id).select("id").maybeSingle()
     : await statusTable(supabase, kind).insert(row).select("id").single();
@@ -79,47 +71,36 @@ export async function saveStatus(kind: StatusKind, id: string | null, formData: 
   return { ok: true, data: { id: data.id } };
 }
 
-async function endOfStage(supabase: Supabase, kind: StatusKind, stage: TaskStatus) {
-  const { data } = await statusTable(supabase, kind)
+/** A position just after the last status of the stage (before whatever follows it). */
+async function afterStage(supabase: Supabase, kind: StatusKind, stage: TaskStatus) {
+  const { data: last } = await statusTable(supabase, kind)
     .select("position")
     .eq("stage", stage)
     .order("position", { ascending: false })
     .limit(1)
     .maybeSingle();
-  return (data?.position ?? 0) + 1;
+  if (!last) {
+    const { data: end } = await statusTable(supabase, kind).select("position").order("position", { ascending: false }).limit(1).maybeSingle();
+    return (end?.position ?? 0) + 1;
+  }
+  const { data: next } = await statusTable(supabase, kind)
+    .select("position")
+    .gt("position", last.position)
+    .order("position")
+    .limit(1)
+    .maybeSingle();
+  return next ? (last.position + next.position) / 2 : last.position + 1;
 }
 
-/** Moves a status one place up (-1) or down (1) within its stage. */
-export async function moveStatus(kind: StatusKind, id: string, direction: -1 | 1): Promise<ActionResult> {
+/** Saves a new order: every status of the kind, first to last. */
+export async function reorderStatuses(kind: StatusKind, ids: string[]): Promise<ActionResult> {
   await requireAdmin();
-  if (!valid(kind, id) || (direction !== -1 && direction !== 1)) return fail("Invalid move.");
+  const parsed = z.object({ kind: kindSchema, ids: z.array(idSchema).min(1).max(200) }).safeParse({ kind, ids });
+  if (!parsed.success) return fail("Invalid order.");
 
   const supabase = await createClient();
-  const { data: status } = await statusTable(supabase, kind).select("stage").eq("id", id).maybeSingle();
-  if (!status) return fail("That status no longer exists. Refresh and try again.");
-  const { data: siblings, error: readError } = await statusTable(supabase, kind)
-    .select("id, position")
-    .eq("stage", status.stage)
-    .order("position")
-    .order("created_at");
-  if (readError) return fail(readError.message);
-
-  const order = siblings.map((s) => s.id);
-  const from = order.indexOf(id);
-  const to = from + direction;
-  if (from < 0 || to < 0 || to >= order.length) return { ok: true };
-  [order[from], order[to]] = [order[to], order[from]];
-
-  // Renumber the stage 1, 2, 3… so statuses with equal positions still move.
-  const was = new Map(siblings.map((s) => [s.id, s.position]));
-  const results = await Promise.all(
-    order
-      .map((statusId, index) => ({ statusId, position: index + 1 }))
-      .filter(({ statusId, position }) => was.get(statusId) !== position)
-      .map(({ statusId, position }) => statusTable(supabase, kind).update({ position }).eq("id", statusId)),
-  );
-  const failed = results.find((r) => r.error);
-  if (failed?.error) return fail(failed.error.message);
+  const { error } = await supabase.rpc("reorder_statuses", { p_kind: parsed.data.kind, p_ids: parsed.data.ids });
+  if (error) return fail(error.message);
 
   revalidateStatuses();
   return { ok: true };
