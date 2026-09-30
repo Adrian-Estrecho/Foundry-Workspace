@@ -132,11 +132,12 @@ export async function getTaskFormOptions(): Promise<TaskFormOptions> {
   const supabase = await createClient();
   const [{ data: projects }, { data: editors }, { data: pipelines }] = await Promise.all([
     supabase.from("projects").select("id, name, status, client_id, created_at").order("created_at", { ascending: false }),
-    // Approved editors only: people still onboarding can't be given work.
+    // Approved editors only: people still onboarding can't be given work. Deleted
+    // ones ("left", always inactive) stay so their past tasks keep their name.
     supabase
       .from("editors")
       .select("id, is_active, profile:profiles!editors_id_fkey(full_name, avatar_url), member:workspace_members!editors_member_fkey!inner(status)")
-      .eq("member.status", "active"),
+      .in("member.status", ["active", "left"]),
     // Admins only (RLS); editors don't get task forms.
     supabase.from("clickup_pipelines").select("project_id"),
   ]);

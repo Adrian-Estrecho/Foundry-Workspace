@@ -33,6 +33,32 @@ export async function setEditorActive(editorId: string, active: boolean): Promis
   return { ok: true };
 }
 
+const REMOVE_ERRORS: Record<string, string> = {
+  not_self: "You can't remove yourself.",
+  not_found: "They're not on the team anymore.",
+  not_editor: "Only editors can be removed here.",
+  still_active: "Mark them inactive first.",
+};
+
+/** Takes an inactive editor off the team. Their hours and past work stay. */
+export async function removeEditor(editorId: string): Promise<ActionResult> {
+  await requirePermission("editors.manage");
+  if (!z.uuid().safeParse(editorId).success) return fail("Invalid editor.");
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("remove_member", { p_user_id: editorId });
+  if (error?.message === "open_tasks") {
+    const open = Number(error.details);
+    return fail(`Reassign their ${open === 1 ? "open task" : `${open} open tasks`} first.`);
+  }
+  if (error) return fail(REMOVE_ERRORS[error.message] ?? error.message);
+
+  revalidateEditor(editorId);
+  revalidatePath("/people");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
 const detailsSchema = z.object({
   software: z.array(z.string().trim().min(1).max(60)).max(20),
   specialties: z.array(z.string().trim().min(1).max(60)).max(20),

@@ -2,8 +2,9 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { LinkIcon, SearchIcon, UserPlusIcon, UsersIcon } from "lucide-react";
+import { LinkIcon, SearchIcon, Trash2Icon, UserPlusIcon, UsersIcon } from "lucide-react";
 import { usePresence } from "@/components/presence/presence-provider";
 import { EmptyState } from "@/components/shared/panel";
 import { Segmented } from "@/components/shared/segmented";
@@ -19,6 +20,7 @@ import type { InvitationRow } from "@/features/invitations/queries";
 import { cn } from "@/lib/utils";
 import type { RosterEditor } from "../queries";
 import { InviteEditorDialog } from "./invite-editor-dialog";
+import { RemoveEditorDialog } from "./remove-editor-dialog";
 
 type Filter = "active" | "onboarding" | "inactive" | "all";
 
@@ -28,6 +30,9 @@ const matches: Record<Filter, (e: RosterEditor) => boolean> = {
   inactive: (e) => e.memberStatus === "active" && !e.isActive,
   all: () => true,
 };
+
+/** Only inactive editors can be deleted. */
+const removable = matches.inactive;
 
 export function EditorRoster({
   editors,
@@ -42,10 +47,12 @@ export function EditorRoster({
   applyUrl: string;
   renderedAt: number;
 }) {
+  const router = useRouter();
   const { onlineIds, ready } = usePresence();
   const [filter, setFilter] = React.useState<Filter>("active");
   const [query, setQuery] = React.useState("");
   const [inviteOpen, setInviteOpen] = React.useState(false);
+  const [toRemove, setToRemove] = React.useState<RosterEditor | null>(null);
 
   const q = query.trim().toLowerCase();
   const visible = editors.filter(
@@ -54,6 +61,7 @@ export function EditorRoster({
       (!q || [e.name, e.email, e.timezone, ...e.software, ...e.specialties].some((v) => v.toLowerCase().includes(q))),
   );
   const count = (f: Filter) => editors.filter(matches[f]).length;
+  const showActions = visible.some(removable);
 
   const copyApplyLink = async () => {
     try {
@@ -128,6 +136,11 @@ export function EditorRoster({
                 <th scope="col" className="hidden px-4 py-2.5 font-medium lg:table-cell">Rate</th>
                 <th scope="col" className="hidden px-4 py-2.5 font-medium lg:table-cell">Local time</th>
                 <th scope="col" className="px-4 py-2.5 font-medium">This week</th>
+                {showActions && (
+                  <th scope="col" className="w-0 px-4 py-2.5">
+                    <span className="sr-only">Actions</span>
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -211,6 +224,22 @@ export function EditorRoster({
                         </span>
                       )}
                     </td>
+                    {showActions && (
+                      <td className="px-4 py-3 text-right">
+                        {removable(editor) && (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="relative z-10 text-muted-foreground hover:text-destructive"
+                            aria-label={`Delete ${editor.name}`}
+                            title="Delete editor"
+                            onClick={() => setToRemove(editor)}
+                          >
+                            <Trash2Icon />
+                          </Button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -220,6 +249,11 @@ export function EditorRoster({
       </div>
 
       <InviteEditorDialog open={inviteOpen} onOpenChange={setInviteOpen} />
+      <RemoveEditorDialog
+        editor={toRemove}
+        onOpenChange={(open) => !open && setToRemove(null)}
+        onRemoved={() => router.refresh()}
+      />
     </>
   );
 }

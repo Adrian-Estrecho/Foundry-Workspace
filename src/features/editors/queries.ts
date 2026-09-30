@@ -66,6 +66,8 @@ export async function getRoster(user: CurrentUser) {
 
   const secondsBy = new Map((hours.data ?? []).map((row) => [row.editor_id, Number(row.seconds)]));
   const editors: RosterEditor[] = (data ?? [])
+    // Deleted editors ("left") keep their record for history but leave the roster.
+    .filter((e) => one(e.member)?.status !== "left")
     .map((e) => ({
       memberStatus: one(e.member)?.status ?? "active",
       id: e.id,

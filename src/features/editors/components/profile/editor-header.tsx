@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeftIcon, PencilIcon } from "lucide-react";
+import { ArrowLeftIcon, PencilIcon, Trash2Icon } from "lucide-react";
 import { useIsOnline } from "@/components/presence/presence-provider";
 import { StatusChip } from "@/components/shared/status";
 import { UserAvatar } from "@/components/shared/user-avatar";
@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { liveStatus } from "@/lib/status";
 import type { Enums } from "@/types/database";
 import { setEditorActive } from "../../actions";
+import { RemoveEditorDialog } from "../remove-editor-dialog";
 import { EditorDetailsDialog, type EditorDetails } from "./editor-details-dialog";
 
 export function EditorHeader({
@@ -39,6 +40,7 @@ export function EditorHeader({
   const [active, setActive] = React.useOptimistic(editor.isActive);
   const [, startTransition] = React.useTransition();
   const [editOpen, setEditOpen] = React.useState(false);
+  const [removeOpen, setRemoveOpen] = React.useState(false);
   const status = liveStatus(editor.workStatus, online);
 
   const toggleActive = (value: boolean) =>
@@ -65,6 +67,8 @@ export function EditorHeader({
               <h1 className="truncate font-heading text-3xl font-semibold tracking-tight">{editor.name}</h1>
               {editor.memberStatus === "onboarding" ? (
                 <span className="rounded-full bg-primary/12 px-2.5 py-1 text-xs font-medium text-primary">Onboarding</span>
+              ) : editor.memberStatus === "left" ? (
+                <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">Deleted</span>
               ) : editor.memberStatus !== "active" ? (
                 <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">Not taken on</span>
               ) : active ? (
@@ -86,9 +90,16 @@ export function EditorHeader({
               Active
             </label>
           )}
-          <Button variant="secondary" size="lg" className="bg-surface ring-1 ring-border" onClick={() => setEditOpen(true)}>
-            <PencilIcon /> Edit details
-          </Button>
+          {editor.memberStatus === "active" && !active && (
+            <Button variant="destructive" size="lg" onClick={() => setRemoveOpen(true)}>
+              <Trash2Icon /> Delete
+            </Button>
+          )}
+          {editor.memberStatus !== "left" && (
+            <Button variant="secondary" size="lg" className="bg-surface ring-1 ring-border" onClick={() => setEditOpen(true)}>
+              <PencilIcon /> Edit details
+            </Button>
+          )}
         </div>
       </div>
 
@@ -97,6 +108,11 @@ export function EditorHeader({
         onOpenChange={setEditOpen}
         editorId={editor.id}
         details={details}
+      />
+      <RemoveEditorDialog
+        editor={removeOpen ? { id: editor.id, name: editor.name } : null}
+        onOpenChange={setRemoveOpen}
+        onRemoved={() => router.push("/editors")}
       />
     </div>
   );

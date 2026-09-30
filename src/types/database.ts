@@ -3010,6 +3010,7 @@ export type Database = {
         }[];
       };
       reject_member: { Args: { p_user_id: string }; Returns: undefined };
+      remove_member: { Args: { p_user_id: string }; Returns: undefined };
       reorder_statuses: { Args: { p_ids: string[]; p_kind: string }; Returns: undefined };
       request_clickup_push: { Args: Record<PropertyKey, never>; Returns: undefined };
       request_notification_emails: { Args: Record<PropertyKey, never>; Returns: undefined };
