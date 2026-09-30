@@ -124,6 +124,33 @@ export function minutesNow(timeZone: string, now: number = Date.now()) {
   return get("hour") * 60 + get("minute");
 }
 
+/** The moment it's `minutes` past midnight on `date` (YYYY-MM-DD) in `timeZone`, as epoch ms. */
+export function momentIn(date: string, minutes: number, timeZone: string) {
+  const [y, m, d] = date.split("-").map(Number);
+  const wall = Date.UTC(y, m - 1, d, 0, minutes);
+  try {
+    const format = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+      second: "numeric",
+    });
+    const offset = (at: number) => {
+      const parts = format.formatToParts(at);
+      const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+      return Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second")) - at;
+    };
+    // The second pass gets the offset right next to a daylight-saving change.
+    return wall - offset(wall - offset(wall));
+  } catch {
+    return wall;
+  }
+}
+
 /** "09:30" → 570 */
 export function toMinutes(time: string) {
   const [h, m] = time.split(":").map(Number);

@@ -41,6 +41,7 @@ export default async function TaskPage(props: PageProps<"/tasks/[id]">) {
   // Editors hand in their trial task from the onboarding page.
   if (task.is_trial && !isAdmin) redirect("/onboarding");
 
+  const clickupUrl = task.clickup_task_id ? clickupTaskUrl(task.clickup_task_id) : null;
   const draft = {
     id: task.id,
     title: task.title,
@@ -51,8 +52,8 @@ export default async function TaskPage(props: PageProps<"/tasks/[id]">) {
     priority: task.priority,
     status: task.status,
     statusId: data.statusInfo.id,
+    fromClickUp: Boolean(clickupUrl),
   };
-  const clickupUrl = task.clickup_task_id ? clickupTaskUrl(task.clickup_task_id) : null;
   const totalSeconds = data.time.reduce((sum, row) => sum + row.seconds, 0);
   const latestFeedback = [...data.comments].reverse().find((c) => c.author?.isAdmin);
 
@@ -121,7 +122,7 @@ export default async function TaskPage(props: PageProps<"/tasks/[id]">) {
               <p className="text-sm leading-relaxed break-words whitespace-pre-line">{task.description}</p>
             ) : (
               <p className="text-sm text-muted-foreground">
-                {clickupUrl ? "No description in ClickUp." : isAdmin ? "No description yet. Use Edit to add a brief." : "No description."}
+                {isAdmin ? "No description yet. Use Edit to add a brief." : "No description."}
               </p>
             )}
           </Panel>
@@ -162,7 +163,6 @@ export default async function TaskPage(props: PageProps<"/tasks/[id]">) {
             createdAt={task.created_at}
             creatorName={data.creatorName}
             completedAt={task.completed_at}
-            fromClickUp={Boolean(clickupUrl)}
           />
 
           <Panel title="Time logged" description={totalSeconds > 0 ? `${formatDuration(totalSeconds)} in total` : undefined}>

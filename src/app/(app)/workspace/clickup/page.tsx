@@ -19,8 +19,8 @@ const STEPS = [
 const HOW_IT_WORKS = [
   "You pick which ClickUp Lists come in, and the status where syncing starts, like Ready to edit.",
   "ClickUp's statuses become your task statuses here.",
-  "Title, description, due date, priority and assignee come from ClickUp. Editors are matched by their email.",
-  "Moving a task here moves it in ClickUp too.",
+  "Title, description, due date, priority, assignee and status stay in step both ways. Editors are matched by their email.",
+  "New tasks are added in ClickUp, and a task's project follows its List.",
 ];
 
 /** Owners and admins connect ClickUp and pick the pipelines that sync into projects. */
@@ -39,8 +39,8 @@ export default async function ClickUpPage() {
           <ClickUpMark className="size-6 text-primary" /> ClickUp
         </h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Bring tasks from your ClickUp pipelines into {user.workspace.name}. ClickUp stays in charge of what each task is, and status
-          changes go both ways.
+          Bring tasks from your ClickUp pipelines into {user.workspace.name}. Changes to a task go both ways: edit it here or in
+          ClickUp.
         </p>
       </div>
 

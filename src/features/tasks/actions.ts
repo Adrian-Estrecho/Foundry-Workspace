@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { clickupAssigneeProblem } from "@/features/clickup/sync";
 import { workspaceAdmins } from "@/features/workspaces/queries";
 import { blankToNull, fail, fieldErrorsOf, optionalText, type ActionResult } from "@/lib/action-result";
 import { requireAdmin, requireUser } from "@/lib/auth";
@@ -14,7 +15,8 @@ import { Constants } from "@/types/database";
  * RLS limits them to tasks assigned to them, and the guard_task_changes
  * trigger limits what they can change (statuses up to the For Review stage,
  * progress). Tasks move by status_id, one of the workspace's statuses; the
- * trigger keeps the stage (tasks.status) in step.
+ * trigger keeps the stage (tasks.status) in step. Changes to a task synced
+ * from ClickUp are sent there by the database (clickup_outbox).
  */
 
 const prioritySchema = z.enum(Constants.public.Enums.task_priority);
@@ -56,7 +58,9 @@ async function endOfColumn(
 // -----------------------------------------------------------------------------
 const taskSchema = z.object({
   title: z.string().trim().min(2, "Give the task a title.").max(200),
-  description: optionalText(8000),
+  // ClickUp descriptions come in at up to 20,000 characters. Browsers send
+  // line breaks as CRLF; they're kept as LF, as ClickUp keeps them.
+  description: z.preprocess((value) => (typeof value === "string" ? value.replace(/\r\n?/g, "\n") : value), optionalText(20_000)),
   project_id: z.preprocess(blankToNull, z.uuid().nullable()),
   assignee_id: z.preprocess(blankToNull, z.uuid().nullable()),
   due_date: z.preprocess(blankToNull, z.iso.date("Pick a valid date.").nullable()),
@@ -100,14 +104,19 @@ export async function createTask(formData: FormData): Promise<ActionResult<{ id:
  * tasks while it may be open, and saving must not put back an old status.
  */
 export async function updateTask(id: string, formData: FormData): Promise<ActionResult> {
-  await requireAdmin();
+  const user = await requireAdmin();
   if (!idSchema.safeParse(id).success) return fail("Invalid task.");
   const parsed = taskSchema.omit({ status_id: true }).safeParse(Object.fromEntries(formData));
   if (!parsed.success) return fail("Please check the highlighted fields.", fieldErrorsOf(parsed.error));
 
   const supabase = await createClient();
-  const { data: before } = await supabase.from("tasks").select("project_id").eq("id", id).maybeSingle();
+  const { data: before } = await supabase.from("tasks").select("project_id, assignee_id, clickup_task_id").eq("id", id).maybeSingle();
   if (!before) return fail("That task no longer exists.");
+  const { assignee_id } = parsed.data;
+  if (before.clickup_task_id && assignee_id && assignee_id !== before.assignee_id) {
+    const problem = await clickupAssigneeProblem(createAdminClient(), user.workspace.id, id, assignee_id);
+    if (problem) return fail(problem, { assignee_id: problem });
+  }
 
   const { error } = await supabase.from("tasks").update(parsed.data).eq("id", id);
   if (error) return fail(dbError(error));
@@ -214,9 +223,13 @@ export async function reviewTask(id: string, decision: "done" | "revisions", fee
 
 /** Hands a task to another editor (or nobody). Used by the By Editor view. */
 export async function reassignTask(id: string, assigneeId: string | null): Promise<ActionResult> {
-  await requireAdmin();
+  const user = await requireAdmin();
   const parsed = z.object({ id: idSchema, assigneeId: idSchema.nullable() }).safeParse({ id, assigneeId });
   if (!parsed.success) return fail("Invalid assignment.");
+  if (parsed.data.assigneeId) {
+    const problem = await clickupAssigneeProblem(createAdminClient(), user.workspace.id, parsed.data.id, parsed.data.assigneeId);
+    if (problem) return fail(problem);
+  }
 
   const supabase = await createClient();
   const { data, error } = await supabase

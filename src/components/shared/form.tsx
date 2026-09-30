@@ -125,7 +125,7 @@ export function NativeSelect({ className, children, ...props }: React.ComponentP
   return (
     <select
       className={cn(
-        "h-10 w-full rounded-xl border border-input bg-transparent px-3 text-sm outline-none scheme-light focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive dark:bg-input/30 dark:scheme-dark",
+        "h-10 w-full rounded-xl border border-input bg-transparent px-3 text-sm outline-none scheme-light focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30 dark:scheme-dark",
         "[&_optgroup]:bg-popover [&_optgroup]:text-muted-foreground [&_option]:bg-popover [&_option]:text-popover-foreground",
         className,
       )}

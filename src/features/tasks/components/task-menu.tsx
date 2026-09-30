@@ -77,7 +77,7 @@ export function TaskMenu({ task, className }: { task: TaskSummary; className?: s
             </DropdownMenuSubContent>
           </DropdownMenuSub>
         )}
-        {workspace.isAdmin && !task.clickupUrl && (
+        {workspace.isAdmin && (
           <>
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
@@ -97,10 +97,15 @@ export function TaskMenu({ task, className }: { task: TaskSummary; className?: s
                 )}
               </DropdownMenuSubContent>
             </DropdownMenuSub>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onSelect={() => workspace.confirmDelete(task)}>
-              <Trash2Icon /> Delete
-            </DropdownMenuItem>
+            {/* Synced tasks are deleted or archived in ClickUp. */}
+            {!task.clickupUrl && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" onSelect={() => workspace.confirmDelete(task)}>
+                  <Trash2Icon /> Delete
+                </DropdownMenuItem>
+              </>
+            )}
           </>
         )}
       </DropdownMenuContent>

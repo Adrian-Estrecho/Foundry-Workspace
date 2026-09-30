@@ -9,7 +9,8 @@ const API = "https://api.clickup.com/api/v2";
 
 export type ClickUpStatus = { status: string; type: string; orderindex: number; color: string };
 export type ClickUpUser = { id: number; username: string | null; email: string | null };
-export type ClickUpTeam = { id: string; name: string };
+/** `members` are full members; guests aren't listed. */
+export type ClickUpTeam = { id: string; name: string; members?: { user: ClickUpUser }[] };
 export type ClickUpList = { id: string; name: string; task_count?: number | null; statuses?: ClickUpStatus[] };
 export type ClickUpFolder = { id: string; name: string; lists: ClickUpList[] };
 export type ClickUpSpace = { id: string; name: string };
@@ -25,6 +26,17 @@ export type ClickUpTask = {
   /** Set on subtasks, which aren't synced. */
   parent: string | null;
   list: { id: string; name: string };
+};
+/** Fields the sync changes with Update Task. Priority is 1 (urgent) to 4 (low); due_date is epoch ms. */
+export type ClickUpTaskUpdate = {
+  name?: string;
+  /** Plain text. A single space clears it. */
+  description?: string;
+  status?: string;
+  priority?: number | null;
+  due_date?: number | null;
+  due_date_time?: boolean;
+  assignees?: { add: number[]; rem: number[] };
 };
 export type ClickUpWebhook = {
   id: string;
@@ -96,7 +108,7 @@ export function clickup(token: string) {
   }
 
   return {
-    user: () => request<{ user: ClickUpUser }>("GET", "/user").then((r) => r.user),
+    user: () => request<{ user: ClickUpUser & { timezone?: string | null } }>("GET", "/user").then((r) => r.user),
     teams: () => request<{ teams: ClickUpTeam[] }>("GET", "/team").then((r) => r.teams),
     spaces: (teamId: string) =>
       request<{ spaces: ClickUpSpace[] }>("GET", `/team/${teamId}/space`, { archived: false }).then((r) => r.spaces),
@@ -113,7 +125,9 @@ export function clickup(token: string) {
         subtasks: false,
       }),
     task: (taskId: string) => request<ClickUpTask>("GET", `/task/${taskId}`),
-    setTaskStatus: (taskId: string, status: string) => request<ClickUpTask>("PUT", `/task/${taskId}`, undefined, { status }),
+    updateTask: (taskId: string, changes: ClickUpTaskUpdate) => request<ClickUpTask>("PUT", `/task/${taskId}`, undefined, changes),
+    /** People with access to the List itself (not through its Folder, Space or workspace). */
+    listMembers: (listId: string) => request<{ members: ClickUpUser[] }>("GET", `/list/${listId}/member`).then((r) => r.members),
     createWebhook: (teamId: string, endpoint: string) =>
       request<{ id: string; webhook: ClickUpWebhook }>("POST", `/team/${teamId}/webhook`, undefined, {
         endpoint,

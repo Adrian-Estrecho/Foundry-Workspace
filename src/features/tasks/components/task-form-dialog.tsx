@@ -25,6 +25,8 @@ export type TaskDraft = {
   /** The stage, when that's all that's known (a new task starts in its first status). */
   status?: TaskStatus;
   statusId?: string;
+  /** Synced from ClickUp: edits are sent there, and the project follows the ClickUp List. */
+  fromClickUp?: boolean;
 };
 
 /**
@@ -49,6 +51,7 @@ export function TaskFormDialog({
   const [pending, startTransition] = React.useTransition();
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const editing = Boolean(task.id);
+  const synced = editing && Boolean(task.fromClickUp);
   const status =
     statuses.find((s) => s.id === task.statusId) ?? statuses.find((s) => s.stage === (task.status ?? "todo")) ?? statuses[0];
 
@@ -90,7 +93,11 @@ export function TaskFormDialog({
         <DialogHeader>
           <DialogTitle className="text-xl">{editing ? "Edit task" : "New task"}</DialogTitle>
           <DialogDescription>
-            {editing ? "Changes are saved for everyone straight away." : "The editor is notified as soon as it's assigned."}
+            {synced
+              ? "Changes are saved for everyone straight away and sent to ClickUp."
+              : editing
+                ? "Changes are saved for everyone straight away."
+                : "The editor is notified as soon as it's assigned."}
           </DialogDescription>
         </DialogHeader>
 
@@ -109,9 +116,16 @@ export function TaskFormDialog({
           <FormRow
             label="Project"
             error={errors.project_id}
-            hint={projects.some((p) => p.clickup) ? "Projects marked ClickUp get their tasks from ClickUp." : undefined}
+            hint={
+              synced
+                ? "It follows the task's List in ClickUp."
+                : projects.some((p) => p.clickup)
+                  ? "Projects marked ClickUp get their tasks from ClickUp."
+                  : undefined
+            }
           >
-            <NativeSelect name="project_id" defaultValue={task.projectId ?? ""}>
+            {synced && <input type="hidden" name="project_id" value={task.projectId ?? ""} />}
+            <NativeSelect name={synced ? undefined : "project_id"} defaultValue={task.projectId ?? ""} disabled={synced}>
               <option value="">No project (internal)</option>
               {[...byClient.entries()].map(([client, list]) => (
                 <optgroup key={client} label={client}>
@@ -126,7 +140,11 @@ export function TaskFormDialog({
               ))}
             </NativeSelect>
           </FormRow>
-          <FormRow label="Assignee" error={errors.assignee_id}>
+          <FormRow
+            label="Assignee"
+            error={errors.assignee_id}
+            hint={synced ? "They need a ClickUp account with the same email." : undefined}
+          >
             <NativeSelect name="assignee_id" defaultValue={task.assigneeId ?? ""}>
               <option value="">Unassigned</option>
               {editors.map((editor) => (
@@ -138,7 +156,7 @@ export function TaskFormDialog({
             </NativeSelect>
           </FormRow>
 
-          <FormRow label="Due date" error={errors.due_date}>
+          <FormRow label="Due date" error={errors.due_date} hint={synced ? "ClickUp gets the date without a time." : undefined}>
             <Input name="due_date" type="date" defaultValue={task.dueDate ?? ""} aria-invalid={!!errors.due_date} />
           </FormRow>
           {editing ? (
@@ -179,7 +197,12 @@ export function TaskFormDialog({
             </div>
           </FieldGroup>
 
-          <FormRow label="Description" error={errors.description} className="sm:col-span-2">
+          <FormRow
+            label="Description"
+            error={errors.description}
+            hint={synced ? "A changed description goes to ClickUp as plain text, replacing any formatting there." : undefined}
+            className="sm:col-span-2"
+          >
             <Textarea
               name="description"
               rows={4}

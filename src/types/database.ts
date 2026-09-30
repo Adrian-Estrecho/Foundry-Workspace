@@ -386,28 +386,31 @@ export type Database = {
       clickup_outbox: {
         Row: {
           attempts: number;
+          fields: string[];
           last_error: string | null;
           next_attempt_at: string;
           queued_at: string;
-          status_id: string;
+          revision: number;
           task_id: string;
           workspace_id: string;
         };
         Insert: {
           attempts?: number;
+          fields?: string[];
           last_error?: string | null;
           next_attempt_at?: string;
           queued_at?: string;
-          status_id: string;
+          revision?: number;
           task_id: string;
           workspace_id: string;
         };
         Update: {
           attempts?: number;
+          fields?: string[];
           last_error?: string | null;
           next_attempt_at?: string;
           queued_at?: string;
-          status_id?: string;
+          revision?: number;
           task_id?: string;
           workspace_id?: string;
         };
@@ -425,6 +428,38 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "workspaces";
             referencedColumns: ["id"];
+          },
+        ];
+      };
+      clickup_people: {
+        Row: {
+          clickup_user_id: number;
+          email: string;
+          name: string | null;
+          seen_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          clickup_user_id: number;
+          email: string;
+          name?: string | null;
+          seen_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          clickup_user_id?: number;
+          email?: string;
+          name?: string | null;
+          seen_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "clickup_people_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "clickup_connections";
+            referencedColumns: ["workspace_id"];
           },
         ];
       };
@@ -2831,11 +2866,17 @@ export type Database = {
       due_clickup_pushes: {
         Args: { p_limit?: number };
         Returns: {
+          assignee_email: string;
           attempts: number;
           clickup_status: string;
           clickup_task_id: string;
+          description: string;
+          due_date: string;
+          fields: string[];
+          list_id: string;
           list_name: string;
-          status_id: string;
+          priority: Database["public"]["Enums"]["task_priority"];
+          revision: number;
           task_id: string;
           title: string;
           workspace_id: string;

@@ -28,7 +28,6 @@ export function DetailsPanel({
   createdAt,
   creatorName,
   completedAt,
-  fromClickUp,
 }: {
   task: Required<Omit<TaskDraft, "id">> & { id: string; statusInfo: StatusBadge };
   assignee: Person | null;
@@ -40,8 +39,6 @@ export function DetailsPanel({
   createdAt: string;
   creatorName: string | null;
   completedAt: string | null;
-  /** ClickUp owns the title, description, due date, priority and assignee. */
-  fromClickUp: boolean;
 }) {
   const workspace = useTaskWorkspace();
   const done = task.status === "done";
@@ -50,8 +47,7 @@ export function DetailsPanel({
     <Panel
       title="Details"
       action={
-        workspace.isAdmin &&
-        !fromClickUp && (
+        workspace.isAdmin && (
           <Button size="sm" variant="secondary" className="bg-surface-strong ring-1 ring-border" onClick={() => workspace.editTask(task)}>
             <PencilIcon /> Edit
           </Button>
@@ -119,10 +115,10 @@ export function DetailsPanel({
           </Row>
         )}
       </dl>
-      {fromClickUp && (
+      {task.fromClickUp && (
         <p className="mt-5 flex gap-2 text-xs text-muted-foreground">
           <ClickUpMark className="size-3.5" />
-          From ClickUp: change the title, description, due date, priority or assignee there and it updates here.
+          Synced with ClickUp: changes made here are sent there, and changes made there show up here.
         </p>
       )}
     </Panel>

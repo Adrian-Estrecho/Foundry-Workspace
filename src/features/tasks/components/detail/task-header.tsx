@@ -42,7 +42,7 @@ export function TaskHeader({
   context: React.ReactNode;
   /** The signed-in editor is the assignee (editors only). */
   canWork: boolean;
-  /** Synced from ClickUp: it's edited and deleted there. */
+  /** Synced from ClickUp: it's deleted there. */
   clickupUrl: string | null;
 }) {
   const router = useRouter();
@@ -135,7 +135,7 @@ export function TaskHeader({
               </a>
             </Button>
           )}
-          {workspace.isAdmin && !clickupUrl && (
+          {workspace.isAdmin && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon-lg" aria-label="More actions">
@@ -146,10 +146,14 @@ export function TaskHeader({
                 <DropdownMenuItem onSelect={() => workspace.editTask(task)}>
                   <PencilIcon /> Edit task
                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem variant="destructive" onSelect={() => workspace.confirmDelete(ref, () => router.push("/tasks"))}>
-                  <Trash2Icon /> Delete task
-                </DropdownMenuItem>
+                {!clickupUrl && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem variant="destructive" onSelect={() => workspace.confirmDelete(ref, () => router.push("/tasks"))}>
+                      <Trash2Icon /> Delete task
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           )}
