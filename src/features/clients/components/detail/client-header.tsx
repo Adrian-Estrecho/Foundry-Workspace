@@ -33,10 +33,13 @@ export function ClientHeader({
   client,
   projectCount,
   editors,
+  canCreateProjects,
 }: {
   client: { id: string; name: string; contactName: string; email: string | null; stage: ClientStage; driveFolderUrl: string | null; deadline: string | null };
   projectCount: number;
   editors: EditorOption[];
+  /** Needs project management. */
+  canCreateProjects: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
@@ -49,7 +52,7 @@ export function ClientHeader({
       const result = await setClientStage(client.id, stage);
       if (!result.ok) return void toast.error(result.error);
       toast.success(`Moved to ${stageLabel(stage)}`);
-      if (stage === "kickoff" && projectCount === 0) setKickoffOpen(true);
+      if (canCreateProjects && stage === "kickoff" && projectCount === 0) setKickoffOpen(true);
       router.refresh();
     });
 
@@ -100,8 +103,12 @@ export function ClientHeader({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="rounded-2xl">
-              <DropdownMenuItem onSelect={() => setKickoffOpen(true)}>New project</DropdownMenuItem>
-              <DropdownMenuSeparator />
+              {canCreateProjects && (
+                <>
+                  <DropdownMenuItem onSelect={() => setKickoffOpen(true)}>New project</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
               <DropdownMenuItem variant="destructive" onSelect={() => setDeleteOpen(true)}>
                 <Trash2Icon /> Delete client
               </DropdownMenuItem>

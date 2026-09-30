@@ -6,7 +6,7 @@ import { after } from "next/server";
 import { z } from "zod";
 import { welcomeAboardEmail } from "@/features/editors/emails";
 import { fail, fieldErrorsOf, type ActionResult } from "@/lib/action-result";
-import { requireAccount, requireAdmin } from "@/lib/auth";
+import { requireAccount, requirePermission } from "@/lib/auth";
 import { sendEmail } from "@/lib/email";
 import { env } from "@/lib/env";
 import { adminEmailContext, workspaceLink } from "@/lib/notify";
@@ -45,7 +45,7 @@ async function bottomOfApplicantColumn(stage: "invited" | "shortlisted") {
  * rather than duplicated.
  */
 export async function inviteApplicant(applicantId: string, position?: number): Promise<ActionResult<{ code: string }>> {
-  const user = await requireAdmin();
+  const user = await requirePermission("editors.manage");
   if (!idSchema.safeParse(applicantId).success || (position !== undefined && !Number.isFinite(position))) {
     return fail("Invalid applicant.");
   }
@@ -114,7 +114,7 @@ const directSchema = z.object({
 
 /** Invites an editor who didn't come through the application form. */
 export async function inviteEditor(formData: FormData): Promise<ActionResult<{ code: string }>> {
-  const user = await requireAdmin();
+  const user = await requirePermission("editors.manage");
   const parsed = directSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return fail("Please check the highlighted fields.", fieldErrorsOf(parsed.error));
 
@@ -144,7 +144,7 @@ export async function inviteEditor(formData: FormData): Promise<ActionResult<{ c
 
 /** Emails an open invitation again, good for another two weeks. */
 export async function resendInvitation(id: string): Promise<ActionResult> {
-  const user = await requireAdmin();
+  const user = await requirePermission("editors.manage");
   if (!idSchema.safeParse(id).success) return fail("Invalid invitation.");
 
   const expiresAt = inDays(INVITATION_DAYS);
@@ -174,7 +174,7 @@ export async function resendInvitation(id: string): Promise<ActionResult> {
 
 /** Stops a code from working. Their application goes back to Shortlisted. */
 export async function revokeInvitation(id: string): Promise<ActionResult> {
-  await requireAdmin();
+  await requirePermission("editors.manage");
   if (!idSchema.safeParse(id).success) return fail("Invalid invitation.");
 
   const supabase = await createClient();

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { TaskStatus } from "@/features/tasks/constants";
 import { fail, fieldErrorsOf, type ActionResult } from "@/lib/action-result";
-import { requireAdmin } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { Constants } from "@/types/database";
 import { STATUS_COLOR_KEYS, STATUS_NAME_MAX, type StatusDef, type StatusKind } from "./constants";
@@ -40,7 +40,7 @@ const valid = (kind: StatusKind, id: string | null) =>
 
 /** The statuses with how much is in each, for the status editor. */
 export async function loadStatuses(kind: StatusKind): Promise<ActionResult<StatusInUse<StatusDef>[]>> {
-  await requireAdmin();
+  await requirePermission("statuses.manage");
   if (!valid(kind, null)) return fail("Invalid status.");
   try {
     return { ok: true, data: await getStatusesInUse(kind) };
@@ -51,7 +51,7 @@ export async function loadStatuses(kind: StatusKind): Promise<ActionResult<Statu
 
 /** Adds a status (id null) or saves changes to one. A new one goes after the last status of its stage. */
 export async function saveStatus(kind: StatusKind, id: string | null, formData: FormData): Promise<ActionResult<{ id: string }>> {
-  await requireAdmin();
+  await requirePermission("statuses.manage");
   if (!valid(kind, id)) return fail("Invalid status.");
   const parsed = z
     .object({
@@ -106,7 +106,7 @@ async function afterStage(supabase: Supabase, kind: StatusKind, stage: TaskStatu
 
 /** Saves a new order: every status of the kind, first to last. */
 export async function reorderStatuses(kind: StatusKind, ids: string[]): Promise<ActionResult> {
-  await requireAdmin();
+  await requirePermission("statuses.manage");
   const parsed = z.object({ kind: kindSchema, ids: z.array(idSchema).min(1).max(200) }).safeParse({ kind, ids });
   if (!parsed.success) return fail("Invalid order.");
 
@@ -120,7 +120,7 @@ export async function reorderStatuses(kind: StatusKind, ids: string[]): Promise<
 
 /** Removes a status. Whatever is in it moves to `moveTo`, another status of the same stage. */
 export async function removeStatus(kind: StatusKind, id: string, moveTo: string | null): Promise<ActionResult> {
-  await requireAdmin();
+  await requirePermission("statuses.manage");
   if (!valid(kind, id) || (moveTo !== null && !idSchema.safeParse(moveTo).success)) return fail("Invalid status.");
 
   const supabase = await createClient();

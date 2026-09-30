@@ -15,12 +15,12 @@ export function HoursReport({
   projects,
   editors,
   total,
-  isAdmin,
+  team,
 }: {
   projects: HoursProject[];
   editors: { id: string; name: string; avatarUrl: string | null; seconds: number }[];
   total: number;
-  isAdmin: boolean;
+  team: boolean;
 }) {
   if (total === 0) {
     return (
@@ -31,8 +31,8 @@ export function HoursReport({
   }
 
   return (
-    <div className={isAdmin ? "grid grid-cols-1 gap-5 xl:grid-cols-3" : "grid grid-cols-1 gap-5"}>
-      <Panel title="By project" description={`${duration(total)} in total`} className={isAdmin ? "xl:col-span-2" : undefined}>
+    <div className={team ? "grid grid-cols-1 gap-5 xl:grid-cols-3" : "grid grid-cols-1 gap-5"}>
+      <Panel title="By project" description={`${duration(total)} in total`} className={team ? "xl:col-span-2" : undefined}>
         <ul className="grid grid-cols-1 gap-2">
           {projects.map((project) => (
             <li key={project.key}>
@@ -62,7 +62,7 @@ export function HoursReport({
                         ) : (
                           <span className="block truncate text-muted-foreground">{task.title}</span>
                         )}
-                        {isAdmin && (
+                        {team && (
                           <span className="block truncate text-xs text-muted-foreground">
                             {task.editors.map((e) => `${e.name} ${duration(e.seconds)}`).join(" · ")}
                           </span>
@@ -78,7 +78,7 @@ export function HoursReport({
         </ul>
       </Panel>
 
-      {isAdmin && (
+      {team && (
         <Panel title="By editor">
           <ul className="grid grid-cols-1 gap-3">
             {editors.map((editor) => (

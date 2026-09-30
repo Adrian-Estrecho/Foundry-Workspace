@@ -4,14 +4,14 @@ import { RealtimeRefresh } from "@/components/shared/realtime-refresh";
 import { ApplicantPipeline } from "@/features/applicants/components/applicant-pipeline";
 import { getApplicantPipeline } from "@/features/applicants/queries";
 import { EditorsTabs } from "@/features/editors/components/editors-tabs";
-import { requireAdmin } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
 
 export const metadata: Metadata = { title: "Applicants" };
 
 export default async function ApplicantsPage() {
-  const user = await requireAdmin();
+  const user = await requirePermission("editors.manage");
   const { applicants } = await getApplicantPipeline();
   const count = (stage: string) => applicants.filter((a) => a.column === stage).length;
   const inProgress = applicants.filter((a) => a.column !== "joined" && a.column !== "rejected").length;

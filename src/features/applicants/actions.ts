@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { fail, type ActionResult } from "@/lib/action-result";
-import { requireAdmin } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { sendEmail } from "@/lib/email";
 import { adminEmailContext } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
@@ -56,7 +56,7 @@ function blockedMove(from: z.infer<typeof stageSchema>, to: z.infer<typeof stage
 
 /** Drag-and-drop move: new stage and/or order within the column. */
 export async function moveApplicant(id: string, stage: string, position: number): Promise<ActionResult> {
-  await requireAdmin();
+  await requirePermission("editors.manage");
   const parsed = z.object({ id: z.uuid(), stage: stageSchema, position: z.number().finite() }).safeParse({ id, stage, position });
   if (!parsed.success) return fail("Invalid move.");
 
@@ -78,7 +78,7 @@ export async function moveApplicant(id: string, stage: string, position: number)
 
 /** Stage change from a menu or the applicant page: the card goes to the bottom of its new column. */
 export async function setApplicantStage(id: string, stage: string): Promise<ActionResult> {
-  await requireAdmin();
+  await requirePermission("editors.manage");
   const parsed = z.object({ id: z.uuid(), stage: stageSchema }).safeParse({ id, stage });
   if (!parsed.success) return fail("Invalid stage.");
 
@@ -103,7 +103,7 @@ export async function setApplicantStage(id: string, stage: string): Promise<Acti
  * invitation stops working.
  */
 export async function rejectApplicant(id: string, notify: boolean, position?: number): Promise<ActionResult> {
-  const user = await requireAdmin();
+  const user = await requirePermission("editors.manage");
   if (!z.uuid().safeParse(id).success || (position !== undefined && !Number.isFinite(position))) {
     return fail("Invalid applicant.");
   }
@@ -141,7 +141,7 @@ export async function rejectApplicant(id: string, notify: boolean, position?: nu
 // -----------------------------------------------------------------------------
 
 export async function setApplicantRating(id: string, rating: number | null): Promise<ActionResult> {
-  await requireAdmin();
+  await requirePermission("editors.manage");
   const parsed = z
     .object({ id: z.uuid(), rating: z.number().int().min(1).max(5).nullable() })
     .safeParse({ id, rating });
@@ -156,7 +156,7 @@ export async function setApplicantRating(id: string, rating: number | null): Pro
 }
 
 export async function updateApplicantNotes(id: string, notes: string): Promise<ActionResult> {
-  await requireAdmin();
+  await requirePermission("editors.manage");
   const parsed = z.object({ id: z.uuid(), notes: z.string().max(20_000) }).safeParse({ id, notes });
   if (!parsed.success) return fail("Notes are too long.");
 
@@ -173,7 +173,7 @@ export async function updateApplicantNotes(id: string, notes: string): Promise<A
 
 /** Deletes an application (e.g. spam). Someone who already joined stays an editor. */
 export async function deleteApplicant(id: string): Promise<ActionResult> {
-  await requireAdmin();
+  await requirePermission("editors.manage");
   if (!z.uuid().safeParse(id).success) return fail("Invalid applicant.");
 
   const supabase = await createClient();

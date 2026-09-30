@@ -11,9 +11,10 @@ import { DetailsPanel } from "@/features/tasks/components/detail/details-panel";
 import { ReviewPanel } from "@/features/tasks/components/detail/review-panel";
 import { SubtasksPanel } from "@/features/tasks/components/detail/subtasks-panel";
 import { TaskHeader } from "@/features/tasks/components/detail/task-header";
+import { taskAccess } from "@/features/tasks/access";
 import { TaskWorkspace } from "@/features/tasks/components/task-workspace";
 import { getTaskDetail } from "@/features/tasks/queries";
-import { requireUser } from "@/lib/auth";
+import { can, requireUser } from "@/lib/auth";
 import { clickupTaskUrl } from "@/lib/clickup";
 import { formatDuration } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/server";
@@ -35,11 +36,11 @@ export default async function TaskPage(props: PageProps<"/tasks/[id]">) {
 
   const data = await getTaskDetail(id, user);
   const { task, assignee, project, client, renderedAt } = data;
-  const isAdmin = user.role === "admin";
+  const access = taskAccess(user, { trial: task.is_trial });
   const isAssignee = assignee?.id === user.id;
 
   // Editors hand in their trial task from the onboarding page.
-  if (task.is_trial && !isAdmin) redirect("/onboarding");
+  if (task.is_trial && !access.manage) redirect("/onboarding");
 
   const clickupUrl = task.clickup_task_id ? clickupTaskUrl(task.clickup_task_id) : null;
   const draft = {
@@ -55,10 +56,11 @@ export default async function TaskPage(props: PageProps<"/tasks/[id]">) {
     fromClickUp: Boolean(clickupUrl),
   };
   const totalSeconds = data.time.reduce((sum, row) => sum + row.seconds, 0);
-  const latestFeedback = [...data.comments].reverse().find((c) => c.author?.isAdmin);
+  // The reviewer's note: the latest comment by someone other than the editor.
+  const latestFeedback = [...data.comments].reverse().find((c) => c.author && c.author.id !== assignee?.id);
 
   return (
-    <TaskWorkspace isAdmin={isAdmin} today={data.today} options={data.options} statuses={data.statuses}>
+    <TaskWorkspace access={access} today={data.today} options={data.options} statuses={data.statuses}>
       <RealtimeRefresh channel={`task-${id}`} tables="tasks,subtasks,task_comments,task_attachments" />
       <TaskHeader
         task={{ ...draft, isTrial: task.is_trial, statusInfo: data.statusInfo }}
@@ -80,7 +82,7 @@ export default async function TaskPage(props: PageProps<"/tasks/[id]">) {
           ) : project ? (
             <>
               {client &&
-                (isAdmin ? (
+                (can(user, "clients.manage") ? (
                   <Link href={`/clients/${client.id}`} className="hover:text-foreground">
                     {client.name}
                   </Link>
@@ -115,14 +117,14 @@ export default async function TaskPage(props: PageProps<"/tasks/[id]">) {
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
         <div className="grid grid-cols-1 content-start gap-5 xl:col-span-8">
-          {isAdmin && task.status === "for_review" && <ReviewPanel taskId={task.id} editorName={assignee?.name ?? null} />}
+          {access.anyStatus && task.status === "for_review" && <ReviewPanel taskId={task.id} editorName={assignee?.name ?? null} />}
 
           <Panel title="Description">
             {task.description ? (
               <p className="text-sm leading-relaxed break-words whitespace-pre-line">{task.description}</p>
             ) : (
               <p className="text-sm text-muted-foreground">
-                {isAdmin ? "No description yet. Use Edit to add a brief." : "No description."}
+                {access.manage ? "No description yet. Use Edit to add a brief." : "No description."}
               </p>
             )}
           </Panel>
@@ -130,14 +132,14 @@ export default async function TaskPage(props: PageProps<"/tasks/[id]">) {
           <SubtasksPanel
             taskId={task.id}
             subtasks={data.subtasks}
-            canEdit={isAdmin || (isAssignee && task.status !== "done")}
+            canEdit={access.manage || (isAssignee && task.status !== "done")}
           />
           <AttachmentsPanel
             taskId={task.id}
             attachments={data.attachments}
-            canAdd={isAdmin || isAssignee}
+            canAdd={access.manage || isAssignee}
             currentUserId={user.id}
-            isAdmin={isAdmin}
+            canRemoveAny={access.manage}
             renderedAt={renderedAt}
           />
           <CommentsPanel
@@ -145,8 +147,8 @@ export default async function TaskPage(props: PageProps<"/tasks/[id]">) {
             comments={data.comments}
             people={data.people}
             currentUserId={user.id}
-            isAdmin={isAdmin}
-            canComment={isAdmin || isAssignee}
+            isAdmin={user.role === "admin"}
+            canComment={access.manage || isAssignee}
             renderedAt={renderedAt}
           />
         </div>
@@ -159,7 +161,7 @@ export default async function TaskPage(props: PageProps<"/tasks/[id]">) {
             project={project ? { id: project.id, name: project.name } : null}
             revisionCount={task.revision_count}
             progress={task.progress_pct}
-            canUpdateProgress={isAdmin || isAssignee}
+            canUpdateProgress={access.manage || isAssignee}
             createdAt={task.created_at}
             creatorName={data.creatorName}
             completedAt={task.completed_at}
@@ -180,7 +182,7 @@ export default async function TaskPage(props: PageProps<"/tasks/[id]">) {
             )}
           </Panel>
 
-          {isAdmin && <HistoryPanel entries={data.activity} renderedAt={renderedAt} />}
+          {data.showHistory && <HistoryPanel entries={data.activity} renderedAt={renderedAt} />}
         </div>
       </div>
     </TaskWorkspace>

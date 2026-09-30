@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { FormBuilder } from "@/features/forms/components/form-builder";
 import { FORM_NAMES, isFormKind } from "@/features/forms/fields";
 import { getWorkspaceForms } from "@/features/forms/queries";
-import { requireAdmin } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { env } from "@/lib/env";
 
 export async function generateMetadata(props: PageProps<"/workspace/forms/[kind]">): Promise<Metadata> {
@@ -13,7 +13,7 @@ export async function generateMetadata(props: PageProps<"/workspace/forms/[kind]
 
 /** Full-screen editor for the application or project request form. */
 export default async function FormBuilderPage(props: PageProps<"/workspace/forms/[kind]">) {
-  const user = await requireAdmin();
+  const user = await requirePermission("workspace.forms");
   const { kind } = await props.params;
   if (!isFormKind(kind)) notFound();
 

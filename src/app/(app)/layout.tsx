@@ -42,7 +42,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     getWorkState(user),
   ]);
 
-  const access: NavAccess = { role: user.role, onboarding };
+  const access: NavAccess = { role: user.role, permissions: user.permissions, onboarding };
   const badges = { "/messages": (unreadAnnouncements.count ?? 0) + (unreadThreads.data?.length ?? 0) };
   const accent = user.accent_color ?? user.workspace.default_accent;
   const toSwitcher = (m: CurrentUserMembership) => ({

@@ -26,7 +26,7 @@ import { TrialTaskPanel } from "@/features/editors/components/profile/trial-task
 import { WEEKDAYS } from "@/features/editors/constants";
 import { getEditorProfile } from "@/features/editors/queries";
 import { StatusDot } from "@/features/statuses/components/status-chip";
-import { requireAdmin } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { dueLabel, formatDay, formatDuration, timeAgo, toHours } from "@/lib/dates";
 import { TASK_STATUS_LABEL } from "@/lib/status";
 import { localTime, zoneCity } from "@/lib/time-zones";
@@ -38,13 +38,13 @@ const RECENT_MS = 3 * 60 * 1000;
 export async function generateMetadata(props: PageProps<"/editors/[id]">): Promise<Metadata> {
   const { id } = await props.params;
   if (!UUID.test(id)) return { title: "Editor" };
-  const user = await requireAdmin();
+  const user = await requirePermission("editors.manage");
   const { profile } = await getEditorProfile(id, user);
   return { title: profile.full_name };
 }
 
 export default async function EditorPage(props: PageProps<"/editors/[id]">) {
-  const user = await requireAdmin();
+  const user = await requirePermission("editors.manage");
   const { id } = await props.params;
   if (!UUID.test(id)) notFound();
 
@@ -73,6 +73,7 @@ export default async function EditorPage(props: PageProps<"/editors/[id]">) {
           workStatus: editor.work_status,
           recentlySeen: renderedAt - lastSeen < RECENT_MS,
           memberStatus: data.member?.status ?? "active",
+          title: data.member?.title ?? null,
         }}
         details={{
           software: editor.software,
@@ -91,6 +92,8 @@ export default async function EditorPage(props: PageProps<"/editors/[id]">) {
           icon={Clock3Icon}
           hint={editor.weekly_hours ? `of ${editor.weekly_hours}h planned` : "No weekly target"}
         />
+        {data.seesWork && (
+          <>
         <KpiTile label="Tasks completed" value={performance.completed} icon={CheckCircle2Icon} hint={`${performance.open} open now`} />
         <KpiTile
           label="On time"
@@ -105,6 +108,8 @@ export default async function EditorPage(props: PageProps<"/editors/[id]">) {
           icon={RotateCcwIcon}
           hint="Per completed task"
         />
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
@@ -129,6 +134,7 @@ export default async function EditorPage(props: PageProps<"/editors/[id]">) {
             />
           )}
 
+          {data.seesWork && (
           <Panel title="Recent work" description={`${performance.open} open · latest completed below`}>
             {data.openTasks.length === 0 && data.recentDone.length === 0 ? (
               <EmptyState icon={FolderKanbanIcon} title="No tasks yet" description="Tasks assigned to them show up here." />
@@ -162,6 +168,7 @@ export default async function EditorPage(props: PageProps<"/editors/[id]">) {
               </ul>
             )}
           </Panel>
+          )}
 
           <Panel title="Recent shifts" description="From Start to Stop working.">
             {data.shifts.length === 0 ? (
@@ -255,6 +262,7 @@ export default async function EditorPage(props: PageProps<"/editors/[id]">) {
             )}
           </Panel>
 
+          {data.showPayment && (
           <Panel title="Payment details" description={data.payment ? `Updated ${timeAgo(data.payment.updated_at, renderedAt)}` : undefined}>
             {data.payment ? (
               <PaymentSummary method={data.payment.method} details={data.payment.details} />
@@ -262,6 +270,7 @@ export default async function EditorPage(props: PageProps<"/editors/[id]">) {
               <EmptyState icon={WalletIcon} title="Not added yet" description="They add these during onboarding." />
             )}
           </Panel>
+          )}
 
           {editor.applicant && (
             <Panel title="Application">

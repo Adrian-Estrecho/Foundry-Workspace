@@ -4,7 +4,7 @@ import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { fail, fieldErrorsOf, type ActionResult } from "@/lib/action-result";
-import { requireAdmin, requireUser } from "@/lib/auth";
+import { can, requirePermission, requireUser } from "@/lib/auth";
 import { sendEmail } from "@/lib/email";
 import { env } from "@/lib/env";
 import { adminEmailContext } from "@/lib/notify";
@@ -37,7 +37,7 @@ export async function sendMessage(input: z.input<typeof messageSchema>): Promise
   const parsed = messageSchema.safeParse(input);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Check your message.");
   const { kind, subjectId, body } = parsed.data;
-  if (kind === "client" && user.role !== "admin") return fail("Only admins write to clients.");
+  if (kind === "client" && !can(user, "clients.manage")) return fail("You don't have access to client messages.");
 
   const supabase = await createClient();
   const { data: threadId, error } = await supabase.rpc("post_message", { p_kind: kind, p_subject_id: subjectId, p_body: body });
@@ -121,7 +121,7 @@ function revalidateAnnouncements() {
 }
 
 export async function createAnnouncement(formData: FormData): Promise<ActionResult> {
-  const user = await requireAdmin();
+  const user = await requirePermission("announcements.post");
   const parsed = announcementSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return fail("Check the highlighted fields.", fieldErrorsOf(parsed.error));
 
@@ -133,7 +133,7 @@ export async function createAnnouncement(formData: FormData): Promise<ActionResu
 }
 
 export async function updateAnnouncement(id: string, formData: FormData): Promise<ActionResult> {
-  await requireAdmin();
+  await requirePermission("announcements.post");
   const parsed = announcementSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success || !z.uuid().safeParse(id).success) {
     return fail("Check the highlighted fields.", parsed.success ? undefined : fieldErrorsOf(parsed.error));
@@ -146,7 +146,7 @@ export async function updateAnnouncement(id: string, formData: FormData): Promis
 }
 
 export async function setAnnouncementPinned(id: string, pinned: boolean): Promise<ActionResult> {
-  await requireAdmin();
+  await requirePermission("announcements.post");
   if (!z.uuid().safeParse(id).success) return fail("That announcement isn't available.");
   const supabase = await createClient();
   const { error } = await supabase.from("announcements").update({ is_pinned: pinned }).eq("id", id);
@@ -156,7 +156,7 @@ export async function setAnnouncementPinned(id: string, pinned: boolean): Promis
 }
 
 export async function deleteAnnouncement(id: string): Promise<ActionResult> {
-  await requireAdmin();
+  await requirePermission("announcements.post");
   if (!z.uuid().safeParse(id).success) return fail("That announcement isn't available.");
   const supabase = await createClient();
   const { error } = await supabase.from("announcements").delete().eq("id", id);

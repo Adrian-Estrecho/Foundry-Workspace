@@ -2617,8 +2617,10 @@ export type Database = {
           approved_at: string | null;
           approved_by: string | null;
           joined_at: string;
+          permissions: string[];
           role: Database["public"]["Enums"]["member_role"];
           status: Database["public"]["Enums"]["member_status"];
+          title: string | null;
           updated_at: string;
           user_id: string;
           workspace_id: string;
@@ -2628,8 +2630,10 @@ export type Database = {
           approved_at?: string | null;
           approved_by?: string | null;
           joined_at?: string;
+          permissions?: string[];
           role?: Database["public"]["Enums"]["member_role"];
           status?: Database["public"]["Enums"]["member_status"];
+          title?: string | null;
           updated_at?: string;
           user_id: string;
           workspace_id: string;
@@ -2639,8 +2643,10 @@ export type Database = {
           approved_at?: string | null;
           approved_by?: string | null;
           joined_at?: string;
+          permissions?: string[];
           role?: Database["public"]["Enums"]["member_role"];
           status?: Database["public"]["Enums"]["member_status"];
+          title?: string | null;
           updated_at?: string;
           user_id?: string;
           workspace_id?: string;
@@ -2823,6 +2829,7 @@ export type Database = {
           work_seconds: number;
         }[];
       };
+      can_manage_task: { Args: { p_task_id: string }; Returns: boolean };
       can_see_profile: { Args: { p_user_id: string }; Returns: boolean };
       claim_notification_emails: {
         Args: { p_limit?: number };
@@ -2889,6 +2896,13 @@ export type Database = {
           seconds: number;
         }[];
       };
+      editor_rates: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          editor_id: string;
+          hourly_rate: number;
+        }[];
+      };
       editor_working_minutes: {
         Args: { p_editor_id: string; p_from: string; p_to: string; p_workspace_id: string };
         Returns: number;
@@ -2896,6 +2910,7 @@ export type Database = {
       end_shift_for: { Args: { p_editor_id: string; p_ended_at?: string }; Returns: number };
       ensure_client_checklist: { Args: { p_client_id: string }; Returns: undefined };
       format_duration: { Args: { p_seconds: number }; Returns: string };
+      has_permission: { Args: { p_permission: string }; Returns: boolean };
       invitation_throttled: { Args: { p_user_id: string }; Returns: boolean };
       is_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
       is_admin_of: { Args: { p_workspace_id: string }; Returns: boolean };

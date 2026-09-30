@@ -50,7 +50,7 @@ export function TaskHeader({
   const [pending, startTransition] = React.useTransition();
   const current = task.statusInfo;
   const ref = { id: task.id, title: task.title, status: task.status, statusInfo: task.statusInfo };
-  const locked = !workspace.isAdmin && task.status === "done";
+  const locked = !workspace.access.anyStatus && task.status === "done";
 
   const change = (to: TaskStatusDef | TaskStatus) =>
     startTransition(async () => {
@@ -59,7 +59,7 @@ export function TaskHeader({
 
   // The one obvious next step for the editor doing the work.
   const next =
-    canWork && !workspace.isAdmin
+    canWork
       ? task.status === "todo"
         ? { status: "in_progress" as const, label: "Start", icon: PlayIcon }
         : task.status === "in_progress" || task.status === "revisions"
@@ -70,10 +70,10 @@ export function TaskHeader({
   return (
     <div className="mb-6">
       <Link
-        href={workspace.isAdmin ? "/tasks" : "/my-tasks"}
+        href={workspace.access.manage && !task.isTrial ? "/tasks" : "/my-tasks"}
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
       >
-        <ArrowLeftIcon className="size-4" /> {workspace.isAdmin ? "Tasks" : "My Tasks"}
+        <ArrowLeftIcon className="size-4" /> {workspace.access.manage && !task.isTrial ? "Tasks" : "My Tasks"}
       </Link>
       <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
@@ -93,7 +93,7 @@ export function TaskHeader({
                 variant="secondary"
                 size="lg"
                 className="bg-surface ring-1 ring-border"
-                disabled={pending || locked || (!workspace.isAdmin && !canWork)}
+                disabled={pending || locked || (!workspace.access.manage && !canWork)}
                 aria-label={`Status: ${current.name}. Change status`}
               >
                 <StatusDot color={current.color} className="size-2.5" />
@@ -118,7 +118,7 @@ export function TaskHeader({
                   </DropdownMenuItem>
                 );
               })}
-              {workspace.isAdmin && (
+              {workspace.access.statuses && (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onSelect={() => workspace.manageStatuses()}>
@@ -135,7 +135,7 @@ export function TaskHeader({
               </a>
             </Button>
           )}
-          {workspace.isAdmin && (
+          {workspace.access.manage && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon-lg" aria-label="More actions">

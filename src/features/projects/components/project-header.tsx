@@ -29,6 +29,7 @@ import { StatusDot } from "@/features/statuses/components/status-chip";
 import { StatusManagerDialog } from "@/features/statuses/components/status-manager";
 import type { StatusBadge } from "@/features/statuses/constants";
 import { deleteProject, setProjectStatus } from "../actions";
+import type { ProjectAccess } from "../access";
 import type { ProjectStatusDef } from "../constants";
 import { ProjectFormDialog, type ClientChoice, type EditorOption, type ProjectEditable } from "./project-form-dialog";
 import { ProjectStatusChip } from "./project-status";
@@ -38,7 +39,7 @@ export function ProjectHeader({
   statusInfo,
   statuses,
   client,
-  isAdmin,
+  access,
   taskCount,
   clients,
   editors,
@@ -50,11 +51,11 @@ export function ProjectHeader({
   statusInfo: StatusBadge;
   statuses: ProjectStatusDef[];
   client: { id: string; name: string };
-  isAdmin: boolean;
+  access: ProjectAccess;
   taskCount: number;
   clients: ClientChoice[];
   editors: EditorOption[];
-  /** The client's portal link (admins), for "Share with client". */
+  /** The client's portal link (people who manage clients), for "Share with client". */
   portal?: PortalInfo;
   siteUrl?: string;
 }) {
@@ -90,7 +91,7 @@ export function ProjectHeader({
       <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
           <p className="truncate text-sm text-muted-foreground">
-            {isAdmin ? (
+            {access.clients ? (
               <Link href={`/clients/${client.id}`} className="hover:text-foreground">
                 {client.name}
               </Link>
@@ -101,7 +102,7 @@ export function ProjectHeader({
           <h1 className="mt-0.5 font-heading text-3xl font-semibold tracking-tight break-words">{project.name}</h1>
         </div>
 
-        {isAdmin ? (
+        {access.manage ? (
           <div className="flex items-center gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -120,10 +121,14 @@ export function ProjectHeader({
                     {status.id === current.id && <CheckIcon className="ml-auto" />}
                   </DropdownMenuItem>
                 ))}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => setEditingStatuses(true)}>
-                  <Settings2Icon /> Edit statuses
-                </DropdownMenuItem>
+                {access.statuses && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={() => setEditingStatuses(true)}>
+                      <Settings2Icon /> Edit statuses
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
             <Button variant="secondary" size="lg" className="bg-surface ring-1 ring-border" onClick={() => setEditOpen(true)}>
@@ -139,9 +144,11 @@ export function ProjectHeader({
                 <DropdownMenuItem onSelect={() => setEditOpen(true)}>
                   <PencilIcon /> Edit project
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setShareOpen(true)}>
-                  <GlobeIcon /> Share with client
-                </DropdownMenuItem>
+                {access.clients && (
+                  <DropdownMenuItem onSelect={() => setShareOpen(true)}>
+                    <GlobeIcon /> Share with client
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem variant="destructive" onSelect={() => setDeleteOpen(true)}>
                   <Trash2Icon /> Delete project
@@ -154,7 +161,7 @@ export function ProjectHeader({
         )}
       </div>
 
-      {isAdmin && (
+      {access.clients && (
         <ProjectPortalDialog
           open={shareOpen}
           onOpenChange={setShareOpen}
@@ -165,9 +172,9 @@ export function ProjectHeader({
         />
       )}
 
-      {isAdmin && <StatusManagerDialog kind="project" open={editingStatuses} onOpenChange={setEditingStatuses} />}
+      {access.statuses && <StatusManagerDialog kind="project" open={editingStatuses} onOpenChange={setEditingStatuses} />}
 
-      {isAdmin && editOpen && (
+      {access.manage && editOpen && (
         <ProjectFormDialog open onOpenChange={setEditOpen} project={project} clients={clients} editors={editors} />
       )}
 

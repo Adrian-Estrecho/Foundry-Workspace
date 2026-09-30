@@ -19,14 +19,14 @@ export function Timesheet({
   totals,
   total,
   today,
-  isAdmin,
+  team,
 }: {
   days: string[];
   rows: TimesheetRow[];
   totals: Record<string, number>;
   total: number;
   today: string;
-  isAdmin: boolean;
+  team: boolean;
 }) {
   if (rows.length === 0) {
     return (
@@ -43,11 +43,11 @@ export function Timesheet({
         <thead className="border-b text-xs text-muted-foreground">
           <tr>
             <th scope="col" className="sticky left-0 bg-card px-4 py-2.5 text-left font-medium">
-              {isAdmin ? "Editor" : "You"}
+              {team ? "Editor" : "You"}
             </th>
             {days.map((day) => (
               <th key={day} scope="col" className={cn("px-2 py-2.5 text-right font-medium tabular", day === today && "text-primary")}>
-                {isAdmin ? (
+                {team ? (
                   <Link href={attendanceHref({ view: "log", date: day })} className="rounded hover:text-foreground">
                     {formatDay(day, { weekday: "short", day: "numeric" })}
                   </Link>

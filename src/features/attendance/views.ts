@@ -1,6 +1,6 @@
 import { addDays, startOfWeek } from "@/lib/dates";
 
-/** What the Attendance page can show, by role. Kept in the URL (?view=). */
+/** What the Attendance page can show, by access. Kept in the URL (?view=). */
 export const ADMIN_VIEWS = [
   { value: "live", label: "Live board" },
   { value: "log", label: "Daily log" },
@@ -15,6 +15,15 @@ export const EDITOR_VIEWS = [
 ] as const;
 
 export type AttendanceView = (typeof ADMIN_VIEWS)[number]["value"] | (typeof EDITOR_VIEWS)[number]["value"];
+
+/**
+ * The team's views for people who see attendance; an editor among them keeps
+ * "My time" first. Everyone else gets their own time only.
+ */
+export function attendanceViews({ team, editor }: { team: boolean; editor: boolean }): readonly { value: AttendanceView; label: string }[] {
+  if (!team) return EDITOR_VIEWS;
+  return editor ? [EDITOR_VIEWS[0], ...ADMIN_VIEWS] : ADMIN_VIEWS;
+}
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const isDate = (value: unknown): value is string =>
@@ -64,9 +73,8 @@ export type AttendanceParams = {
 
 export function parseAttendanceParams(
   params: Record<string, string | string[] | undefined>,
-  { isAdmin, today }: { isAdmin: boolean; today: string },
+  { views, today }: { views: readonly { value: string }[]; today: string },
 ): AttendanceParams {
-  const views: readonly { value: string }[] = isAdmin ? ADMIN_VIEWS : EDITOR_VIEWS;
   const requested = first(params.view);
   const view = (views.some((v) => v.value === requested) ? requested : views[0].value) as AttendanceView;
 

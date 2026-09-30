@@ -40,14 +40,15 @@ export function AttachmentsPanel({
   attachments,
   canAdd,
   currentUserId,
-  isAdmin,
+  canRemoveAny,
   renderedAt,
 }: {
   taskId: string;
   attachments: Attachment[];
   canAdd: boolean;
   currentUserId: string;
-  isAdmin: boolean;
+  /** Remove anyone's files, not just their own. */
+  canRemoveAny: boolean;
   renderedAt: number;
 }) {
   const router = useRouter();
@@ -149,7 +150,7 @@ export function AttachmentsPanel({
           {attachments.map((attachment) => {
             const Icon = attachment.kind === "file" ? FileIcon : LinkIcon;
             const title = attachment.label || (attachment.href ? hostOf(attachment.href) : "File");
-            const canRemove = isAdmin || attachment.addedBy === currentUserId;
+            const canRemove = canRemoveAny || attachment.addedBy === currentUserId;
             return (
               <li key={attachment.id} className="flex items-center gap-3 rounded-lg bg-surface p-2.5 ring-1 ring-border">
                 <span className="grid size-8 shrink-0 place-items-center rounded-md bg-primary/12 text-primary">

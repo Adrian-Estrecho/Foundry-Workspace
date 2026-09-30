@@ -20,7 +20,9 @@ import { RealtimeRefresh } from "@/components/shared/realtime-refresh";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { ProjectHeader } from "@/features/projects/components/project-header";
 import { ProjectTasks } from "@/features/projects/components/project-tasks";
+import { taskAccess } from "@/features/tasks/access";
 import { RECENT_DONE_DAYS } from "@/features/tasks/constants";
+import { projectAccess } from "@/features/projects/access";
 import { getClientChoices, getProjectDetail } from "@/features/projects/queries";
 import { requireUser } from "@/lib/auth";
 import { env } from "@/lib/env";
@@ -43,10 +45,10 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
   const { id } = await props.params;
   if (!UUID.test(id)) notFound();
 
-  const isAdmin = user.role === "admin";
-  const [data, clients] = await Promise.all([getProjectDetail(id, user), isAdmin ? getClientChoices() : Promise.resolve([])]);
+  const access = projectAccess(user);
+  const [data, clients] = await Promise.all([getProjectDetail(id, user), access.manage ? getClientChoices(user) : Promise.resolve([])]);
   const { project, client, team, tasks, today, renderedAt } = data;
-  const portal = isAdmin
+  const portal = access.clients
     ? (await (await createClient()).from("client_portals").select("token, enabled, last_viewed_at").eq("client_id", project.client_id).maybeSingle()).data
     : null;
 
@@ -82,7 +84,7 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
           team,
         }}
         client={client}
-        isAdmin={isAdmin}
+        access={access}
         taskCount={tasks.length}
         clients={clients}
         editors={data.editorOptions}
@@ -91,11 +93,11 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
       />
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiTile label={isAdmin ? "Open tasks" : "Your open tasks"} value={open.length} icon={ListTodoIcon} hint={`${tasks.length - open.length} done`} />
+        <KpiTile label={access.manage ? "Open tasks" : "Your open tasks"} value={open.length} icon={ListTodoIcon} hint={`${tasks.length - open.length} done`} />
         <KpiTile label="Overdue" value={overdue} icon={AlarmClockIcon} tone={overdue > 0 ? "danger" : "default"} hint={overdue > 0 ? "Needs attention" : "All on track"} />
         <KpiTile label="Waiting for review" value={forReview} icon={EyeIcon} />
         <KpiTile
-          label={isAdmin ? "Hours logged" : "Your hours"}
+          label={access.manage ? "Hours logged" : "Your hours"}
           value={formatDuration(totalSeconds).replace("<1m", "0h")}
           icon={Clock3Icon}
           hint={project.deadline ? (delivered ? "Delivered" : `Deadline ${formatDay(project.deadline, { month: "short", day: "numeric" })}`) : undefined}
@@ -133,7 +135,7 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
             <ProjectLink icon={FolderOpenIcon} label="Google Drive folder" href={project.drive_folder_url} />
             <ProjectLink icon={PlayCircleIcon} label="Frame.io review" href={project.frameio_url} />
           </ul>
-          {isAdmin && !project.drive_folder_url && !project.frameio_url && (
+          {access.manage && !project.drive_folder_url && !project.frameio_url && (
             <p className="mt-3 text-xs text-muted-foreground">Add links with Edit so editors can find the footage.</p>
           )}
         </Panel>
@@ -154,14 +156,14 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
                         {editor.id === user.id && <span className="font-normal text-muted-foreground"> (you)</span>}
                       </span>
                       <span className="block text-xs text-muted-foreground">
-                        {!editor.isActive ? "Inactive" : isAdmin || editor.id === user.id ? `${openTasks} open ${openTasks === 1 ? "task" : "tasks"}` : "Editor"}
+                        {!editor.isActive ? "Inactive" : access.manage || editor.id === user.id ? `${openTasks} open ${openTasks === 1 ? "task" : "tasks"}` : "Editor"}
                       </span>
                     </span>
                   </>
                 );
                 return (
                   <li key={editor.id}>
-                    {isAdmin ? (
+                    {access.editors ? (
                       <Link href={`/editors/${editor.id}`} className="flex items-center gap-3 rounded-lg p-1.5 hover:bg-accent/50">
                         {row}
                       </Link>
@@ -179,14 +181,14 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
       <ProjectTasks
         projectId={project.id}
         tasks={tasks}
-        isAdmin={isAdmin}
+        access={taskAccess(user)}
         today={today}
         doneSince={new Date(renderedAt - RECENT_DONE_DAYS * 86_400_000).toISOString()}
         options={data.taskOptions}
         statuses={data.taskStatuses}
       />
 
-      <div className={cn("mt-6 grid grid-cols-1 gap-5", isAdmin && "lg:grid-cols-2")}>
+      <div className={cn("mt-6 grid grid-cols-1 gap-5", access.manage && "lg:grid-cols-2")}>
         <Panel title="Time logged" description={totalSeconds > 0 ? `${formatDuration(totalSeconds)} across all tasks` : undefined}>
           {data.time.length === 0 ? (
             <EmptyState icon={Clock3Icon} title="No time logged yet" description="Hours show here as editors work on this project's tasks." />
@@ -206,7 +208,7 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
             </ul>
           )}
         </Panel>
-        {isAdmin && <HistoryPanel entries={data.activity} renderedAt={renderedAt} />}
+        {access.manage && <HistoryPanel entries={data.activity} renderedAt={renderedAt} />}
       </div>
     </>
   );

@@ -8,7 +8,7 @@ import { SopsStep } from "@/features/editors/components/onboarding/sops-step";
 import { SopAdminList } from "@/features/sops/components/sop-admin-list";
 import { SOP_CATEGORY_LABEL } from "@/features/sops/constants";
 import { getSopAdminList, getSopLibrary } from "@/features/sops/queries";
-import { requireUser } from "@/lib/auth";
+import { can, requireUser } from "@/lib/auth";
 import { Constants } from "@/types/database";
 
 export const metadata: Metadata = { title: "SOPs" };
@@ -16,12 +16,13 @@ export const metadata: Metadata = { title: "SOPs" };
 /**
  * How the workspace works, by category. Editors (onboarding ones included)
  * read and acknowledge them; required ones are also a step in onboarding.
- * Admins write, edit and publish them, and see who has read each one.
+ * Admins (and people allowed to) write, edit and publish them, and see who
+ * has read each one.
  */
 export default async function SopsPage() {
   const user = await requireUser({ allowOnboarding: true });
 
-  if (user.role === "admin") {
+  if (can(user, "sops.manage")) {
     const { sops, teamSize, renderedAt } = await getSopAdminList();
     const categories = Constants.public.Enums.sop_category.filter((category) => sops.some((sop) => sop.category === category));
     return (

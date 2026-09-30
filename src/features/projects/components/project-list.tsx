@@ -34,6 +34,7 @@ import { Input } from "@/components/ui/input";
 import { dueLabel } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { setProjectStatus } from "../actions";
+import type { ProjectAccess } from "../access";
 import type { ProjectStatusDef } from "../constants";
 import type { ProjectSummary } from "../queries";
 import { ProjectFormDialog, type ClientChoice, type EditorOption } from "./project-form-dialog";
@@ -41,19 +42,19 @@ import { ProjectStatusChip } from "./project-status";
 
 type Scope = "active" | "delivered" | "all";
 
-/** Project cards with task progress. Admins can add projects and change status from each card. */
+/** Project cards with task progress. Project managers can add projects and change status from each card. */
 export function ProjectList({
   projects,
   statuses,
   today,
-  isAdmin,
+  access,
   clients,
   editors,
 }: {
   projects: ProjectSummary[];
   statuses: ProjectStatusDef[];
   today: string;
-  isAdmin: boolean;
+  access: ProjectAccess;
   clients: ClientChoice[];
   editors: EditorOption[];
 }) {
@@ -111,12 +112,14 @@ export function ProjectList({
             ))}
           </NativeSelect>
         )}
-        {isAdmin && (
+        {(access.manage || access.statuses) && (
           <div className="flex gap-2 sm:ml-auto">
-            <StatusManagerButton kind="project" />
-            <Button onClick={() => setCreating(true)}>
-              <PlusIcon /> New project
-            </Button>
+            {access.statuses && <StatusManagerButton kind="project" />}
+            {access.manage && (
+              <Button onClick={() => setCreating(true)}>
+                <PlusIcon /> New project
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -128,23 +131,23 @@ export function ProjectList({
             title={projects.length === 0 ? "No projects yet" : "No projects match"}
             description={
               projects.length === 0
-                ? isAdmin
+                ? access.manage
                   ? "Projects are usually created when a client reaches Kickoff. You can also add one here."
                   : "Projects you're assigned to show up here."
                 : "Try another filter."
             }
-            action={isAdmin && projects.length === 0 ? <Button onClick={() => setCreating(true)}>Create a project</Button> : undefined}
+            action={access.manage && projects.length === 0 ? <Button onClick={() => setCreating(true)}>Create a project</Button> : undefined}
           />
         </div>
       ) : (
         <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
           {visible.map((project) => (
-            <ProjectCard key={project.id} project={project} statuses={statuses} today={today} isAdmin={isAdmin} />
+            <ProjectCard key={project.id} project={project} statuses={statuses} today={today} access={access} />
           ))}
         </ul>
       )}
 
-      {isAdmin && creating && (
+      {access.manage && creating && (
         <ProjectFormDialog open onOpenChange={setCreating} clients={clients} editors={editors} />
       )}
     </>
@@ -155,12 +158,12 @@ function ProjectCard({
   project,
   statuses,
   today,
-  isAdmin,
+  access,
 }: {
   project: ProjectSummary;
   statuses: ProjectStatusDef[];
   today: string;
-  isAdmin: boolean;
+  access: ProjectAccess;
 }) {
   const delivered = project.status === "delivered";
   const late = !delivered && project.deadline !== null && project.deadline < today;
@@ -183,7 +186,7 @@ function ProjectCard({
 
         <div className="mt-4">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>{isAdmin ? "Tasks" : "Your tasks"}</span>
+            <span>{access.manage ? "Tasks" : "Your tasks"}</span>
             <span className="tabular">
               {project.tasks.done}/{project.tasks.total} done
             </span>
@@ -216,16 +219,24 @@ function ProjectCard({
           </span>
         </div>
       </Link>
-      {isAdmin && (
+      {access.manage && (
         <div className="absolute top-3 right-3">
-          <StatusMenu project={project} statuses={statuses} />
+          <StatusMenu project={project} statuses={statuses} canEditStatuses={access.statuses} />
         </div>
       )}
     </li>
   );
 }
 
-function StatusMenu({ project, statuses }: { project: ProjectSummary; statuses: ProjectStatusDef[] }) {
+function StatusMenu({
+  project,
+  statuses,
+  canEditStatuses,
+}: {
+  project: ProjectSummary;
+  statuses: ProjectStatusDef[];
+  canEditStatuses: boolean;
+}) {
   const router = useRouter();
   const [editing, setEditing] = React.useState(false);
   const move = async (status: ProjectStatusDef) => {
@@ -261,12 +272,16 @@ function StatusMenu({ project, statuses }: { project: ProjectSummary; statuses: 
               <StatusDot color={status.color} /> <span className="truncate">{status.name}</span>
             </DropdownMenuItem>
           ))}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => setEditing(true)}>
-          <Settings2Icon /> Edit statuses
-        </DropdownMenuItem>
+        {canEditStatuses && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => setEditing(true)}>
+              <Settings2Icon /> Edit statuses
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
-      <StatusManagerDialog kind="project" open={editing} onOpenChange={setEditing} />
+      {canEditStatuses && <StatusManagerDialog kind="project" open={editing} onOpenChange={setEditing} />}
     </DropdownMenu>
   );
 }

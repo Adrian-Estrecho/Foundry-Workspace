@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { blankToNull, fail, fieldErrorsOf, optionalText, type ActionResult } from "@/lib/action-result";
-import { requireAdmin, requireUser } from "@/lib/auth";
+import { requirePermission, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -126,9 +126,9 @@ const endShiftSchema = z.object({
   ended_at: z.preprocess(blankToNull, z.iso.datetime({ offset: true }).nullable()),
 });
 
-/** An admin ends a shift someone left running, now or at an earlier time. */
+/** Someone who sees team attendance ends a shift left running, now or at an earlier time. */
 export async function endShiftFor(input: { editorId: string; endedAt: string | null }): Promise<ActionResult<{ seconds: number }>> {
-  await requireAdmin();
+  await requirePermission("attendance.view");
   const parsed = endShiftSchema.safeParse({ editor_id: input.editorId, ended_at: input.endedAt });
   if (!parsed.success) return fail("Pick a valid time.");
 

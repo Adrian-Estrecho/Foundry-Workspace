@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { fail, type ActionResult } from "@/lib/action-result";
-import { requireAdmin } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import {
   FIELD_ID,
@@ -33,7 +33,7 @@ const formSchema = z.array(fieldSchema).max(MAX_FIELDS, `A form can have up to $
 
 /** Saves a public form's fields. Returns them as they'll be shown. */
 export async function saveForm(kind: FormKind, input: FormField[]): Promise<ActionResult<{ fields: FormField[] }>> {
-  const user = await requireAdmin();
+  const user = await requirePermission("workspace.forms");
   if (!isFormKind(kind)) return fail("Unknown form.");
 
   const parsed = formSchema.safeParse(input);
@@ -67,7 +67,7 @@ export async function saveForm(kind: FormKind, input: FormField[]): Promise<Acti
 
 /** Back to the built-in form. */
 export async function resetForm(kind: FormKind): Promise<ActionResult<{ fields: FormField[] }>> {
-  const user = await requireAdmin();
+  const user = await requirePermission("workspace.forms");
   if (!isFormKind(kind)) return fail("Unknown form.");
 
   const supabase = await createClient();

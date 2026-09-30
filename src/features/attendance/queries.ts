@@ -85,8 +85,11 @@ type EditorInfo = {
   shiftStart: string;
 };
 
-/** The workspace's approved editors (admins), or just the caller (editors). */
-async function editorsFor(supabase: Supabase, user: CurrentUser): Promise<EditorInfo[]> {
+/**
+ * The workspace's approved editors (people who see team attendance), or just
+ * the caller (everyone else, or anyone asking for their own time).
+ */
+async function editorsFor(supabase: Supabase, user: CurrentUser, onlyMe = false): Promise<EditorInfo[]> {
   let query = supabase
     .from("editors")
     .select(
@@ -95,7 +98,7 @@ async function editorsFor(supabase: Supabase, user: CurrentUser): Promise<Editor
        member:workspace_members!editors_member_fkey!inner(status)`,
     )
     .eq("member.status", "active");
-  if (user.role !== "admin") query = query.eq("id", user.id);
+  if (onlyMe || !user.permissions.includes("attendance.view")) query = query.eq("id", user.id);
   const { data } = await query;
   return (data ?? [])
     .map((e) => ({
@@ -273,9 +276,11 @@ export type LogShift = {
   report: { workDone: string; blockers: string | null; progress: number | null; taskTitle: string | null } | null;
 };
 
-export async function getShiftLog(user: CurrentUser, from: string, to: string) {
+/** onlyMe: just the caller's shifts, for people who otherwise see the team's. */
+export async function getShiftLog(user: CurrentUser, from: string, to: string, { onlyMe = false } = {}) {
   const supabase = await createClient();
-  const [shifts, editors] = await Promise.all([shiftsBetween(supabase, from, to), editorsFor(supabase, user)]);
+  const [all, editors] = await Promise.all([shiftsBetween(supabase, from, to), editorsFor(supabase, user, onlyMe)]);
+  const shifts = onlyMe ? all.filter((s) => s.editor_id === user.id) : all;
   const people = await namesFor(
     supabase,
     shifts.map((s) => s.editor_id),
@@ -315,7 +320,7 @@ export async function getShiftLog(user: CurrentUser, from: string, to: string) {
     return from < localToday || minutesNow(e.timeZone, now) >= toMinutes(e.shiftStart);
   };
   const absent =
-    user.role === "admin" && from === to
+    !onlyMe && user.permissions.includes("attendance.view") && from === to
       ? editors
           .filter((e) => e.isActive && e.workDays.includes(isoWeekday(from)) && due(e) && !log.some((s) => s.editorId === e.id))
           .map((e) => ({ id: e.id, name: e.name, avatarUrl: e.avatarUrl, shiftStart: e.shiftStart }))
@@ -337,10 +342,11 @@ export type TimesheetRow = {
   open: boolean;
 };
 
-export async function getTimesheet(user: CurrentUser, weekStart: string) {
+export async function getTimesheet(user: CurrentUser, weekStart: string, { onlyMe = false } = {}) {
   const supabase = await createClient();
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  const [shifts, editors] = await Promise.all([shiftsBetween(supabase, days[0], days[6]), editorsFor(supabase, user)]);
+  const [all, editors] = await Promise.all([shiftsBetween(supabase, days[0], days[6]), editorsFor(supabase, user, onlyMe)]);
+  const shifts = onlyMe ? all.filter((s) => s.editor_id === user.id) : all;
   const people = await namesFor(
     supabase,
     shifts.map((s) => s.editor_id),

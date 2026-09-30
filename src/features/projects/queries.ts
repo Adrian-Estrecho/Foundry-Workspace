@@ -119,9 +119,18 @@ export async function getProjects(user: CurrentUser) {
   return { projects, statuses, today };
 }
 
-/** Clients to pick from when creating a project from the Projects page. */
-export async function getClientChoices() {
+/**
+ * Clients to pick from when creating a project from the Projects page. People
+ * who manage projects but not clients only get names (the client directory).
+ */
+export async function getClientChoices(user: CurrentUser) {
   const supabase = await createClient();
+  if (!user.permissions.includes("clients.manage")) {
+    const { data } = await supabase.from("client_directory").select("id, company, contact_name");
+    return (data ?? [])
+      .flatMap((c) => (c.id && c.contact_name ? [{ id: c.id, name: c.company?.trim() || c.contact_name, driveFolderUrl: null, deadline: null }] : []))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
   const { data } = await supabase.from("clients").select("id, company, contact_name, stage, drive_folder_url, deadline");
   return (data ?? [])
     .map((c) => ({
@@ -136,7 +145,7 @@ export async function getClientChoices() {
 
 export async function getProjectDetail(id: string, user: CurrentUser) {
   const supabase = await createClient();
-  const admin = user.role === "admin";
+  const admin = user.permissions.includes("tasks.manage");
 
   const { data: project } = await supabase
     .from("projects")
@@ -158,7 +167,7 @@ export async function getProjectDetail(id: string, user: CurrentUser) {
     admin ? getTaskFormOptions() : Promise.resolve(null),
     admin ? getEditorOptions() : Promise.resolve([]),
     people(teamIds),
-    // Whether teammates are still active is admin-only information.
+    // Whether teammates are still active is for people who manage the work.
     admin ? supabase.from("editors").select("id, is_active").in("id", teamIds) : Promise.resolve({ data: [] }),
     getTaskStatuses(),
     getProjectStatuses(),

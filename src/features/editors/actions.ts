@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { blankToNull, fail, fieldErrorsOf, optionalText, type ActionResult } from "@/lib/action-result";
-import { requireAdmin } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 function revalidateEditor(id?: string) {
@@ -21,7 +21,7 @@ const hoursSchema = optionalNumber(z.number().int("Use whole hours.").min(0).max
 // -----------------------------------------------------------------------------
 
 export async function setEditorActive(editorId: string, active: boolean): Promise<ActionResult> {
-  await requireAdmin();
+  await requirePermission("editors.manage");
   if (!z.uuid().safeParse(editorId).success) return fail("Invalid editor.");
 
   const supabase = await createClient();
@@ -44,7 +44,7 @@ const detailsSchema = z.object({
 
 /** Work details for this workspace. (Timezone and phone are the editor's own, in their settings.) */
 export async function updateEditorDetails(editorId: string, formData: FormData): Promise<ActionResult> {
-  await requireAdmin();
+  await requirePermission("editors.manage");
   if (!z.uuid().safeParse(editorId).success) return fail("Invalid editor.");
   const parsed = detailsSchema.safeParse({
     ...Object.fromEntries(formData),
@@ -72,7 +72,7 @@ export async function updateEditorDetails(editorId: string, formData: FormData):
 
 /** Admins can tick or untick any step, e.g. a contract received by email. */
 export async function toggleEditorChecklistItem(itemId: string, done: boolean): Promise<ActionResult> {
-  await requireAdmin();
+  await requirePermission("editors.manage");
   if (!z.uuid().safeParse(itemId).success) return fail("Invalid step.");
 
   const supabase = await createClient();
@@ -96,7 +96,7 @@ const trialSchema = z.object({
 
 /** Creates the editor's test edit (a trial task: internal, no client project). */
 export async function assignTrialTask(editorId: string, formData: FormData): Promise<ActionResult> {
-  const user = await requireAdmin();
+  const user = await requirePermission("editors.manage");
   if (!z.uuid().safeParse(editorId).success) return fail("Invalid editor.");
   const parsed = trialSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return fail("Please check the highlighted fields.", fieldErrorsOf(parsed.error));
@@ -121,7 +121,7 @@ export async function reviewTrialTask(
   decision: "done" | "revisions",
   feedback: string,
 ): Promise<ActionResult> {
-  const user = await requireAdmin();
+  const user = await requirePermission("editors.manage");
   const parsed = z
     .object({ taskId: z.uuid(), decision: z.enum(["done", "revisions"]), feedback: z.string().trim().max(4000) })
     .safeParse({ taskId, decision, feedback });
@@ -146,7 +146,7 @@ export async function reviewTrialTask(
 }
 
 export async function deleteTrialTask(taskId: string): Promise<ActionResult> {
-  await requireAdmin();
+  await requirePermission("editors.manage");
   if (!z.uuid().safeParse(taskId).success) return fail("Invalid task.");
 
   const supabase = await createClient();

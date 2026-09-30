@@ -29,6 +29,8 @@ export function EditorHeader({
     workStatus: Enums<"work_status">;
     recentlySeen: boolean;
     memberStatus: Enums<"member_status">;
+    /** Their access title from People, if they have one. */
+    title: string | null;
   };
   details: EditorDetails;
 }) {
@@ -69,6 +71,9 @@ export function EditorHeader({
                 <StatusChip status={status} />
               ) : (
                 <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">Inactive</span>
+              )}
+              {editor.title && (
+                <span className="rounded-full bg-surface px-2.5 py-1 text-xs font-medium ring-1 ring-border">{editor.title}</span>
               )}
             </div>
             <p className="mt-1 truncate text-muted-foreground">{editor.subtitle}</p>

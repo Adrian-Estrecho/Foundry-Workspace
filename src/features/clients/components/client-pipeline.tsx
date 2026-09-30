@@ -42,8 +42,11 @@ export function ClientPipeline({
   editors,
   intakeUrl,
   today,
+  canCreateProjects,
 }: {
   clients: PipelineClient[];
+  /** Offer the first project at Kickoff (needs project management). */
+  canCreateProjects: boolean;
   /** This workspace's public project form. */
   intakeUrl: string;
   editors: EditorOption[];
@@ -68,7 +71,7 @@ export function ClientPipeline({
   const afterStageChange = (client: PipelineClient, stage: ClientStage) => {
     if (stage === client.column) return;
     toast.success(`${client.name} moved to ${stageLabel(stage)}`);
-    if (stage === "kickoff" && client.projectCount === 0) setKickoff(client);
+    if (canCreateProjects && stage === "kickoff" && client.projectCount === 0) setKickoff(client);
   };
 
   const onMove = async (client: PipelineClient, column: string, position: number) => {

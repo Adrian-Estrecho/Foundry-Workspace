@@ -20,15 +20,15 @@ import type { TaskSummary } from "../queries";
 import { useTaskWorkspace } from "./task-workspace";
 
 /** Where a task opens. Editors hand in trial tasks from their onboarding page. */
-export const taskHref = (task: Pick<TaskSummary, "id" | "isTrial">, isAdmin: boolean) =>
-  task.isTrial && !isAdmin ? "/onboarding" : `/tasks/${task.id}`;
+export const taskHref = (task: Pick<TaskSummary, "id" | "isTrial">, manage: boolean) =>
+  task.isTrial && !manage ? "/onboarding" : `/tasks/${task.id}`;
 
 /** Card and row actions. "Move to" also works on phones, where dragging is fiddly. */
 export function TaskMenu({ task, className }: { task: TaskSummary; className?: string }) {
   const workspace = useTaskWorkspace();
   const targets = workspace.statuses.filter((s) => s.id !== task.statusInfo.id && workspace.canMoveTo(s));
   const editors = workspace.options?.editors.filter((e) => e.isActive && e.id !== task.assignee?.id) ?? [];
-  const canMove = targets.length > 0 && (workspace.isAdmin || task.status !== "done");
+  const canMove = targets.length > 0 && (workspace.access.anyStatus || task.status !== "done");
 
   return (
     <DropdownMenu>
@@ -44,7 +44,7 @@ export function TaskMenu({ task, className }: { task: TaskSummary; className?: s
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52 rounded-2xl">
         <DropdownMenuItem asChild>
-          <Link href={taskHref(task, workspace.isAdmin)}>
+          <Link href={taskHref(task, workspace.access.manage)}>
             <ExternalLinkIcon /> Open task
           </Link>
         </DropdownMenuItem>
@@ -66,7 +66,7 @@ export function TaskMenu({ task, className }: { task: TaskSummary; className?: s
                   <StatusDot color={status.color} /> {status.name}
                 </DropdownMenuItem>
               ))}
-              {workspace.isAdmin && (
+              {workspace.access.statuses && (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onSelect={() => workspace.addStatus()}>
@@ -77,7 +77,7 @@ export function TaskMenu({ task, className }: { task: TaskSummary; className?: s
             </DropdownMenuSubContent>
           </DropdownMenuSub>
         )}
-        {workspace.isAdmin && (
+        {workspace.access.manage && (
           <>
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>

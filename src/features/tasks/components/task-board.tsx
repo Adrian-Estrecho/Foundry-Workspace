@@ -39,7 +39,7 @@ export function TaskBoard({
     label: status.name,
     dot: statusColor(status.color).dot,
     action:
-      workspace.isAdmin && addTasks && status.stage !== "done" ? (
+      workspace.access.manage && addTasks && status.stage !== "done" ? (
         <Button
           variant="ghost"
           size="icon-xs"
@@ -62,18 +62,18 @@ export function TaskBoard({
         return target ? workspace.dropOnStatus(task, target, position) : Promise.resolve(false);
       }}
       itemLabel={(task) => task.title}
-      emptyText={emptyText ?? (workspace.isAdmin ? "Drag a task here" : "Nothing here")}
+      emptyText={emptyText ?? (workspace.access.manage ? "Drag a task here" : "Nothing here")}
       renderCard={(task, { overlay }) => (
         <TaskCard
           task={task}
           today={workspace.today}
-          href={taskHref(task, workspace.isAdmin)}
+          href={taskHref(task, workspace.access.manage)}
           overlay={overlay}
           menu={overlay ? null : <TaskMenu task={task} />}
         />
       )}
       trailing={
-        workspace.isAdmin ? (
+        workspace.access.statuses ? (
           <button
             type="button"
             onClick={() => workspace.addStatus()}

@@ -14,7 +14,7 @@ import { ProjectsPanel } from "@/features/clients/components/detail/projects-pan
 import { AnswerList } from "@/features/forms/components/answer-list";
 import { getClientDetail } from "@/features/clients/queries";
 import { ClientPortalPanel } from "@/features/portal/components/portal-admin";
-import { requireAdmin } from "@/lib/auth";
+import { can, requirePermission } from "@/lib/auth";
 import { formatDay, timeAgo, todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
@@ -30,7 +30,7 @@ export async function generateMetadata(props: PageProps<"/clients/[id]">): Promi
 }
 
 export default async function ClientPage(props: PageProps<"/clients/[id]">) {
-  const user = await requireAdmin();
+  const user = await requirePermission("clients.manage");
   const { id } = await props.params;
   if (!UUID.test(id)) notFound();
 
@@ -56,6 +56,7 @@ export default async function ClientPage(props: PageProps<"/clients/[id]">) {
         }}
         projectCount={projects.length}
         editors={editors}
+        canCreateProjects={can(user, "tasks.manage")}
       />
 
       <div className="grid gap-5 xl:grid-cols-12">
@@ -75,6 +76,7 @@ export default async function ClientPage(props: PageProps<"/clients/[id]">) {
             }))}
             editors={editors}
             today={today}
+            canCreate={can(user, "tasks.manage")}
           />
           <NotesPanel clientId={client.id} notes={client.call_notes} />
 

@@ -12,31 +12,30 @@ import { ShiftLog } from "@/features/attendance/components/shift-log";
 import { Timesheet } from "@/features/attendance/components/timesheet";
 import { getHours, getLiveBoard, getShiftLog, getTimesheet } from "@/features/attendance/queries";
 import {
-  ADMIN_VIEWS,
-  EDITOR_VIEWS,
   RANGE_PRESETS,
   attendanceHref,
+  attendanceViews,
   parseAttendanceParams,
   presetRange,
   type AttendanceParams,
 } from "@/features/attendance/views";
-import { requireUser } from "@/lib/auth";
+import { can, requireUser } from "@/lib/auth";
 import { addDays, formatDay, formatDuration, startOfWeek, todayIn, toHours } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Attendance" };
 
 /**
- * Admins: the live board, a daily log with end-of-shift reports, weekly
- * timesheets and hours per project. Editors: their own time, timesheet and
- * hours. Everything exports to CSV.
+ * Admins and people who see team attendance: the live board, a daily log with
+ * end-of-shift reports, weekly timesheets and hours per project. Editors: their
+ * own time, timesheet and hours. Everything exports to CSV.
  */
 export default async function AttendancePage(props: PageProps<"/attendance">) {
   const user = await requireUser();
-  const isAdmin = user.role === "admin";
+  const team = can(user, "attendance.view");
   const today = todayIn(user.timezone);
-  const params = parseAttendanceParams(await props.searchParams, { isAdmin, today });
-  const views = isAdmin ? ADMIN_VIEWS : EDITOR_VIEWS;
+  const views = attendanceViews({ team, editor: user.role === "editor" });
+  const params = parseAttendanceParams(await props.searchParams, { views, today });
 
   return (
     <>
@@ -44,7 +43,7 @@ export default async function AttendancePage(props: PageProps<"/attendance">) {
       <PageHeader
         title="Attendance"
         description={
-          isAdmin
+          team
             ? `Who's working at ${user.workspace.name}, and the hours behind it.`
             : "Your shifts, reports and hours. Start and stop work from the top bar."
         }
@@ -77,7 +76,7 @@ export default async function AttendancePage(props: PageProps<"/attendance">) {
 }
 
 async function View({ params, today, user }: { params: AttendanceParams; today: string; user: Awaited<ReturnType<typeof requireUser>> }) {
-  const isAdmin = user.role === "admin";
+  const team = can(user, "attendance.view");
 
   switch (params.view) {
     case "live": {
@@ -111,7 +110,7 @@ async function View({ params, today, user }: { params: AttendanceParams; today: 
             next={params.week < thisWeek ? attendanceHref({ view: "timesheet", week: addDays(params.week, 7) }) : null}
             reset={params.week !== thisWeek ? { label: "This week", href: attendanceHref({ view: "timesheet" }) } : null}
           />
-          <Timesheet {...sheet} today={today} isAdmin={isAdmin} />
+          <Timesheet {...sheet} today={today} team={team} />
           <p className="mt-2 text-xs text-muted-foreground">
             Hours by the day each shift started, in each person&apos;s own time zone.
           </p>
@@ -124,14 +123,17 @@ async function View({ params, today, user }: { params: AttendanceParams; today: 
       return (
         <>
           <RangePicker params={params} today={today} />
-          <HoursReport {...data} isAdmin={isAdmin} />
+          <HoursReport {...data} team={team} />
         </>
       );
     }
 
     case "mine": {
       const weekStart = startOfWeek(today);
-      const [sheet, log] = await Promise.all([getTimesheet(user, weekStart), getShiftLog(user, addDays(today, -13), today)]);
+      const [sheet, log] = await Promise.all([
+        getTimesheet(user, weekStart, { onlyMe: true }),
+        getShiftLog(user, addDays(today, -13), today, { onlyMe: true }),
+      ]);
       const me = sheet.rows[0];
       const todays = log.shifts.filter((s) => s.workDate === today);
       const worked = todays.reduce((sum, s) => sum + s.workSeconds, 0);

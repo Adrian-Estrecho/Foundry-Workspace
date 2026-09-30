@@ -5,7 +5,7 @@ import { Conversation } from "@/features/messages/components/conversation";
 import { InboxList } from "@/features/messages/components/inbox-list";
 import { InboxShell, MessagesFrame } from "@/features/messages/components/messages-frame";
 import { getEditorConversation, getEditorInbox, getInboxCounts } from "@/features/messages/queries";
-import { requireUser } from "@/lib/auth";
+import { can, requireUser } from "@/lib/auth";
 
 export const metadata: Metadata = { title: "Team messages" };
 
@@ -21,7 +21,7 @@ export default async function TeamMessagesPage() {
   if (!isAdmin) {
     const conversation = await getEditorConversation(user, user.id);
     return (
-      <MessagesFrame tab="team" isAdmin={false} counts={counts}>
+      <MessagesFrame tab="team" isAdmin={false} clients={can(user, "clients.manage")} counts={counts}>
         <div className="flex h-[calc(100dvh-16.5rem)] min-h-[28rem] flex-col overflow-hidden rounded-xl border bg-card">
           <Conversation data={conversation} viewer={{ id: user.id, isAdmin: false, timeZone: user.timezone }} renderedAt={counts.renderedAt} />
         </div>
@@ -31,7 +31,7 @@ export default async function TeamMessagesPage() {
 
   const inbox = await getEditorInbox(counts.unreadThreadIds);
   return (
-    <MessagesFrame tab="team" isAdmin counts={counts}>
+    <MessagesFrame tab="team" isAdmin clients counts={counts}>
       <InboxShell
         selected={false}
         list={

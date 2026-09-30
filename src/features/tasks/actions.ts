@@ -5,7 +5,7 @@ import { z } from "zod";
 import { clickupAssigneeProblem } from "@/features/clickup/sync";
 import { workspaceAdmins } from "@/features/workspaces/queries";
 import { blankToNull, fail, fieldErrorsOf, optionalText, type ActionResult } from "@/lib/action-result";
-import { requireAdmin, requireUser } from "@/lib/auth";
+import { requirePermission, requireUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { Constants } from "@/types/database";
@@ -69,7 +69,7 @@ const taskSchema = z.object({
 });
 
 export async function createTask(formData: FormData): Promise<ActionResult<{ id: string }>> {
-  const user = await requireAdmin();
+  const user = await requirePermission("tasks.manage");
   const parsed = taskSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return fail("Please check the highlighted fields.", fieldErrorsOf(parsed.error));
   const subtasks = String(formData.get("subtasks") ?? "")
@@ -104,7 +104,7 @@ export async function createTask(formData: FormData): Promise<ActionResult<{ id:
  * tasks while it may be open, and saving must not put back an old status.
  */
 export async function updateTask(id: string, formData: FormData): Promise<ActionResult> {
-  const user = await requireAdmin();
+  const user = await requirePermission("tasks.manage", "editors.manage");
   if (!idSchema.safeParse(id).success) return fail("Invalid task.");
   const parsed = taskSchema.omit({ status_id: true }).safeParse(Object.fromEntries(formData));
   if (!parsed.success) return fail("Please check the highlighted fields.", fieldErrorsOf(parsed.error));
@@ -128,7 +128,7 @@ export async function updateTask(id: string, formData: FormData): Promise<Action
 
 /** Deletes a task with its subtasks, comments and files. Logged time stays (unlinked). */
 export async function deleteTask(id: string): Promise<ActionResult> {
-  await requireAdmin();
+  await requirePermission("tasks.manage", "editors.manage");
   if (!idSchema.safeParse(id).success) return fail("Invalid task.");
 
   const supabase = await createClient();
@@ -140,7 +140,7 @@ export async function deleteTask(id: string): Promise<ActionResult> {
   if (!data) return fail("That task no longer exists.");
 
   // Storage policies only reach files of tasks that still exist, so the
-  // cleanup runs as the service role, on paths this admin could read above.
+  // cleanup runs as the service role, on paths this person could read above.
   const paths = (files ?? []).map((f) => f.storage_path).filter((p): p is string => Boolean(p));
   if (paths.length) await createAdminClient().storage.from("task-files").remove(paths);
 
@@ -190,11 +190,11 @@ export async function moveTask(id: string, statusId: string, position: number | 
 }
 
 /**
- * An admin's review of work handed in: approve (Done) or send back with
- * feedback. The task goes to the first status of that stage.
+ * A review of work handed in (admins, or anyone who may set any status):
+ * approve (Done) or send back with feedback. The task goes to the first status of that stage.
  */
 export async function reviewTask(id: string, decision: "done" | "revisions", feedback: string): Promise<ActionResult> {
-  const user = await requireAdmin();
+  const user = await requirePermission("tasks.status", "editors.manage");
   const parsed = z
     .object({ id: idSchema, decision: z.enum(["done", "revisions"]), feedback: z.string().trim().max(4000) })
     .safeParse({ id, decision, feedback });
@@ -223,7 +223,7 @@ export async function reviewTask(id: string, decision: "done" | "revisions", fee
 
 /** Hands a task to another editor (or nobody). Used by the By Editor view. */
 export async function reassignTask(id: string, assigneeId: string | null): Promise<ActionResult> {
-  const user = await requireAdmin();
+  const user = await requirePermission("tasks.manage", "editors.manage");
   const parsed = z.object({ id: idSchema, assigneeId: idSchema.nullable() }).safeParse({ id, assigneeId });
   if (!parsed.success) return fail("Invalid assignment.");
   if (parsed.data.assigneeId) {
@@ -247,7 +247,7 @@ export async function reassignTask(id: string, assigneeId: string | null): Promi
 
 /** New due date, e.g. from dragging on the calendar. */
 export async function rescheduleTask(id: string, dueDate: string | null): Promise<ActionResult> {
-  await requireAdmin();
+  await requirePermission("tasks.manage", "editors.manage");
   const parsed = z.object({ id: idSchema, dueDate: z.iso.date().nullable() }).safeParse({ id, dueDate });
   if (!parsed.success) return fail("Invalid date.");
 

@@ -8,6 +8,7 @@ import { clickupTaskUrl } from "@/lib/clickup";
 import { addDays, todayIn } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/server";
 import { one } from "@/lib/utils";
+import { taskAccess } from "./access";
 import { monthGrid } from "./calendar";
 import { RECENT_DONE_DAYS, TASK_STAGES, taskStageLabel, type TaskPriority, type TaskStatus } from "./constants";
 import type { TaskFilters } from "./filters";
@@ -258,7 +259,6 @@ export async function getProjectTasks(projectId: string) {
 // -----------------------------------------------------------------------------
 export async function getTaskDetail(id: string, user: CurrentUser) {
   const supabase = await createClient();
-  const admin = user.role === "admin";
 
   const { data: task } = await supabase
     .from("tasks")
@@ -275,12 +275,15 @@ export async function getTaskDetail(id: string, user: CurrentUser) {
     .eq("id", id)
     .maybeSingle();
   if (!task) notFound();
+  const access = taskAccess(user, { trial: task.is_trial });
+  // Test edits' history is filed under tasks, which hiring can't read.
+  const showHistory = user.role === "admin" || (!task.is_trial && access.manage);
 
   const [clients, admins, time, activity, options, statuses] = await Promise.all([
     clientNames([task.project?.client_id]),
     workspaceAdmins(supabase, user.workspace.id),
     supabase.rpc("task_time", { p_task_id: id }),
-    admin
+    showHistory
       ? supabase
           .from("activity_log")
           .select("id, summary, created_at, actor:profiles(full_name, avatar_url)")
@@ -288,7 +291,7 @@ export async function getTaskDetail(id: string, user: CurrentUser) {
           .order("created_at", { ascending: false })
           .limit(12)
       : Promise.resolve({ data: [] }),
-    admin ? getTaskFormOptions() : Promise.resolve(null),
+    access.manage ? getTaskFormOptions() : Promise.resolve(null),
     getTaskStatuses(),
   ]);
 
@@ -336,6 +339,7 @@ export async function getTaskDetail(id: string, user: CurrentUser) {
 
   return {
     task,
+    showHistory,
     statusInfo: toStatusBadge(task.status_info, task.status),
     statuses,
     assignee,

@@ -41,6 +41,17 @@ import { LogoUpload } from "./logo-upload";
 /** The ClickUp connection at a glance, for the Integrations section. */
 export type ClickUpSummary = { teamName: string; pipelines: number } | null;
 
+/** Which parts someone may edit: owners and admins get all; others what they were given. */
+export type WorkspaceSections = {
+  brand: boolean;
+  forms: boolean;
+  contract: boolean;
+  links: boolean;
+  /** The test edit (hiring). */
+  hiring: boolean;
+  integrations: boolean;
+};
+
 /** A public form at a glance, for the Forms section. */
 export type FormSummary = { questions: number; own: number; updatedAt: string | null };
 
@@ -77,7 +88,6 @@ const SECTIONS = [
   { id: "hiring", label: "Test edit", icon: ClapperboardIcon, fields: TEST_FIELDS },
   { id: "integrations", label: "Integrations", icon: PlugIcon, fields: [] },
 ] as const satisfies { id: string; label: string; icon: LucideIcon; fields: readonly Field[] }[];
-const SECTION_IDS = SECTIONS.map((s) => s.id);
 
 const RESOURCES = [
   {
@@ -126,12 +136,13 @@ function initialValues(workspace: Workspace, template: TestTemplate | null): Val
 }
 
 /**
- * Everything owners and admins set for the workspace, in sections with a
- * jump list. Edits collect until saved from the bar that appears (or
+ * Everything set for the workspace, in sections with a jump list (only the
+ * sections this person may edit). Edits collect until saved from the bar that appears (or
  * Ctrl/⌘+S); the logo is the exception and saves as soon as it's picked.
  */
 export function WorkspaceSettings({
   workspace,
+  sections,
   template,
   logoUrl,
   siteUrl,
@@ -139,6 +150,7 @@ export function WorkspaceSettings({
   clickup,
 }: {
   workspace: Workspace;
+  sections: WorkspaceSections;
   template: TestTemplate | null;
   logoUrl: string | null;
   siteUrl: string;
@@ -152,7 +164,18 @@ export function WorkspaceSettings({
   const [logo, setLogo] = React.useState(logoUrl);
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
   const [pending, startTransition] = React.useTransition();
-  const active = useActiveSection(SECTION_IDS);
+  const shows: Record<(typeof SECTIONS)[number]["id"], boolean> = {
+    brand: sections.brand,
+    links: sections.brand,
+    forms: sections.forms,
+    onboarding: sections.contract || sections.links,
+    attendance: sections.brand,
+    hiring: sections.hiring,
+    integrations: sections.integrations,
+  };
+  const visible = SECTIONS.filter((section) => shows[section.id]);
+  const active = useActiveSection(visible.map((section) => section.id));
+  const resources = RESOURCES.filter((r) => (r.field === "contract_template_url" ? sections.contract : sections.links));
 
   const changed = (fields: readonly Field[]) => fields.some((field) => values[field] !== saved[field]);
   const dirty = changed(FIELDS);
@@ -227,7 +250,7 @@ export function WorkspaceSettings({
 
   const host = siteUrl.replace(/^https?:\/\//, "");
   const linksLive = values.slug === saved.slug;
-  const resourcesAdded = RESOURCES.filter((r) => isLink(values[r.field])).length;
+  const resourcesAdded = resources.filter((r) => isLink(values[r.field])).length;
   const graceMinutes = Math.min(Math.max(Math.round(Number(values.missed_clock_in_grace_minutes)) || 0, 0), 720);
   const [brand, links, formsSection, onboarding, attendance, hiring, integrations] = SECTIONS;
 
@@ -242,7 +265,7 @@ export function WorkspaceSettings({
       className="grid grid-cols-1 gap-8 lg:grid-cols-[11rem_minmax(0,1fr)]"
     >
       <nav aria-label="Workspace settings" className="sticky top-20 hidden gap-0.5 self-start lg:grid">
-        {SECTIONS.map((section) => {
+        {visible.map((section) => {
           const current = active === section.id;
           const hasError = section.fields.some((field) => fieldErrors[field]);
           const unsaved = changed(section.fields);
@@ -280,7 +303,7 @@ export function WorkspaceSettings({
       </nav>
 
       <div className="grid min-w-0 grid-cols-1 content-start gap-5 2xl:grid-cols-2">
-        <Section section={brand} description="How your workspace looks to your team, applicants and clients." className="2xl:col-span-2">
+        <Section section={brand} hidden={!shows.brand} description="How your workspace looks to your team, applicants and clients." className="2xl:col-span-2">
           <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_20rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
             <div className="grid content-start gap-6">
               <LogoUpload workspaceId={workspace.id} logoUrl={logo} onChange={setLogo} />
@@ -314,6 +337,7 @@ export function WorkspaceSettings({
 
         <Section
           section={links}
+          hidden={!shows.links}
           description="Share these so editors can apply and clients can send you work. No sign-in needed."
           badge={
             <Badge tone={values.accepting_applications ? "success" : "muted"}>
@@ -357,6 +381,7 @@ export function WorkspaceSettings({
 
         <Section
           section={formsSection}
+          hidden={!shows.forms}
           description="Change the questions on your public forms: add your own, drag them into order, take some off."
         >
           <div className="grid gap-3">
@@ -367,16 +392,17 @@ export function WorkspaceSettings({
 
         <Section
           section={onboarding}
+          hidden={!shows.onboarding}
           description="Links every new editor gets while they onboard."
           className="2xl:col-span-2"
           badge={
-            <Badge tone={resourcesAdded === RESOURCES.length ? "success" : "muted"}>
-              {resourcesAdded} of {RESOURCES.length} added
+            <Badge tone={resourcesAdded === resources.length ? "success" : "muted"}>
+              {resourcesAdded} of {resources.length} added
             </Badge>
           }
         >
-          <div className="grid gap-3 2xl:grid-cols-3">
-            {RESOURCES.map((resource) => {
+          <div className={cn("grid gap-3", resources.length === 3 ? "2xl:grid-cols-3" : resources.length === 2 && "2xl:grid-cols-2")}>
+            {resources.map((resource) => {
               const value = values[resource.field];
               const added = isLink(value);
               const error = fieldErrors[resource.field];
@@ -423,7 +449,7 @@ export function WorkspaceSettings({
           </div>
         </Section>
 
-        <Section section={attendance} description="When to flag an editor who hasn't started their shift." className="2xl:col-span-2">
+        <Section section={attendance} hidden={!shows.attendance} description="When to flag an editor who hasn't started their shift." className="2xl:col-span-2">
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-[13rem_minmax(0,1fr)] sm:items-start">
             <FormRow label="Missed start alert" error={fieldErrors.missed_clock_in_grace_minutes} hint="0 to 720 minutes after the shift starts.">
               <span className="relative block">
@@ -439,6 +465,7 @@ export function WorkspaceSettings({
 
         <Section
           section={hiring}
+          hidden={!shows.hiring}
           className="2xl:col-span-2"
           description="Given to every editor who joins with an invitation, due a few days later. Leave the title empty to assign one by hand from their profile."
           badge={
@@ -475,6 +502,7 @@ export function WorkspaceSettings({
 
         <Section
           section={integrations}
+          hidden={!shows.integrations}
           className="2xl:col-span-2"
           description="Tools that feed work into ReEdit."
           badge={<Badge tone={clickup ? "success" : "muted"}>{clickup ? "ClickUp connected" : "Nothing connected"}</Badge>}
@@ -528,17 +556,21 @@ export function WorkspaceSettings({
 
 function Section({
   section,
+  hidden = false,
   description,
   badge,
   className,
   children,
 }: {
   section: (typeof SECTIONS)[number];
+  /** Not one this person may edit. */
+  hidden?: boolean;
   description: React.ReactNode;
   badge?: React.ReactNode;
   className?: string;
   children: React.ReactNode;
 }) {
+  if (hidden) return null;
   return (
     <section id={section.id} aria-labelledby={`${section.id}-title`} className={cn("scroll-mt-20 rounded-xl border bg-card", className)}>
       <header className="flex flex-wrap items-start gap-x-3.5 gap-y-2 border-b px-5 py-4">

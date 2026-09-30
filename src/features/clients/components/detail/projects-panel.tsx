@@ -27,8 +27,11 @@ export function ProjectsPanel({
   projects,
   editors,
   today,
+  canCreate,
 }: {
   client: { id: string; name: string; driveFolderUrl: string | null; deadline: string | null };
+  /** Needs project management. */
+  canCreate: boolean;
   projects: Project[];
   editors: EditorOption[];
   today: string;
@@ -40,9 +43,11 @@ export function ProjectsPanel({
       title="Projects"
       description={projects.length ? `${projects.length} ${projects.length === 1 ? "project" : "projects"}` : undefined}
       action={
-        <Button size="sm" variant="secondary" className="bg-surface-strong ring-1 ring-border" onClick={() => setOpen(true)}>
-          <PlusIcon /> New project
-        </Button>
+        canCreate && (
+          <Button size="sm" variant="secondary" className="bg-surface-strong ring-1 ring-border" onClick={() => setOpen(true)}>
+            <PlusIcon /> New project
+          </Button>
+        )
       }
     >
       {projects.length === 0 ? (
@@ -50,7 +55,7 @@ export function ProjectsPanel({
           icon={FolderKanbanIcon}
           title="No projects yet"
           description="Create the first project when the client reaches Kickoff."
-          action={<Button onClick={() => setOpen(true)}>Create first project</Button>}
+          action={canCreate ? <Button onClick={() => setOpen(true)}>Create first project</Button> : undefined}
         />
       ) : (
         <ul className="grid gap-2">

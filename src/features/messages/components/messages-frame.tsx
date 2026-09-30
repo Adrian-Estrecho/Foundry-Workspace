@@ -8,11 +8,15 @@ import { MessagesTabs } from "./messages-tabs";
 export function MessagesFrame({
   tab,
   isAdmin,
+  clients,
   counts,
   children,
 }: {
   tab: "announcements" | "team" | "clients";
+  /** Admins read every editor's thread; editors have their own line to the admins. */
   isAdmin: boolean;
+  /** Shows the Clients tab (admins and people who manage clients). */
+  clients: boolean;
   counts: { announcements: number; team: number; clients: number };
   children: React.ReactNode;
 }) {
@@ -24,10 +28,12 @@ export function MessagesFrame({
         description={
           isAdmin
             ? "Announcements for the team, and private conversations with editors and clients."
-            : "Announcements from the team, and a private line to the admins."
+            : clients
+              ? "Announcements from the team, a private line to the admins, and conversations with clients."
+              : "Announcements from the team, and a private line to the admins."
         }
       />
-      <MessagesTabs active={tab} isAdmin={isAdmin} counts={counts} />
+      <MessagesTabs active={tab} isAdmin={isAdmin} clients={clients} counts={counts} />
       {children}
     </>
   );

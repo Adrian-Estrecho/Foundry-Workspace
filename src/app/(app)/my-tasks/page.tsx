@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { RealtimeRefresh } from "@/components/shared/realtime-refresh";
 import { MyTasks } from "@/features/tasks/components/my-tasks";
+import { taskAccess } from "@/features/tasks/access";
 import { getMyTasks } from "@/features/tasks/queries";
 import { requireUser } from "@/lib/auth";
 
@@ -18,7 +19,7 @@ export default async function MyTasksPage(props: PageProps<"/my-tasks">) {
   return (
     <>
       <RealtimeRefresh channel="my-tasks" tables="tasks,subtasks,task_comments" />
-      <MyTasks tasks={tasks} statuses={statuses} today={today} view={view === "board" ? "board" : "list"} />
+      <MyTasks access={{ ...taskAccess(user), manage: false }} tasks={tasks} statuses={statuses} today={today} view={view === "board" ? "board" : "list"} />
     </>
   );
 }

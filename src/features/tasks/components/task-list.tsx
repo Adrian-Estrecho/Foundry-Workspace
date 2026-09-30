@@ -92,7 +92,7 @@ export function TaskList({ tasks, showAssignee = true }: { tasks: TaskSummary[];
             return (
               <tr key={task.id} className="group transition-colors hover:bg-accent/40">
                 <td className="px-3 py-2.5">
-                  <Link href={taskHref(task, workspace.isAdmin)} className="block min-w-0 rounded outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <Link href={taskHref(task, workspace.access.manage)} className="block min-w-0 rounded outline-none focus-visible:ring-2 focus-visible:ring-ring">
                     <span className={cn("block truncate font-medium", done && "text-muted-foreground line-through decoration-muted-foreground/40")}>
                       {task.title}
                     </span>

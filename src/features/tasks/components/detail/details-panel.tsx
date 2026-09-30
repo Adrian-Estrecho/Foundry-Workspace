@@ -47,7 +47,7 @@ export function DetailsPanel({
     <Panel
       title="Details"
       action={
-        workspace.isAdmin && (
+        workspace.access.manage && (
           <Button size="sm" variant="secondary" className="bg-surface-strong ring-1 ring-border" onClick={() => workspace.editTask(task)}>
             <PencilIcon /> Edit
           </Button>
@@ -59,7 +59,7 @@ export function DetailsPanel({
           {assignee ? (
             <span className="flex min-w-0 items-center gap-2">
               <UserAvatar name={assignee.name} src={assignee.avatarUrl} className="size-6" />
-              {workspace.isAdmin ? (
+              {workspace.access.editors ? (
                 <Link href={`/editors/${assignee.id}`} className="truncate font-medium hover:text-primary">
                   {assignee.name}
                 </Link>

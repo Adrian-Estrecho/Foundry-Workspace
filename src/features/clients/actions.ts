@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireAdmin } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { Constants } from "@/types/database";
@@ -34,7 +34,7 @@ function revalidateClient(id?: string) {
 
 /** Drag-and-drop move: new stage and/or order within the column. */
 export async function moveClient(id: string, stage: string, position: number): Promise<ClientActionResult> {
-  await requireAdmin();
+  await requirePermission("clients.manage");
   const parsed = z.object({ id: z.uuid(), stage: stageSchema, position: z.number().finite() }).safeParse({ id, stage, position });
   if (!parsed.success) return fail("Invalid move.");
 
@@ -51,7 +51,7 @@ export async function moveClient(id: string, stage: string, position: number): P
 
 /** Stage change from a menu or the client page: the card goes to the bottom of its new column. */
 export async function setClientStage(id: string, stage: string): Promise<ClientActionResult> {
-  await requireAdmin();
+  await requirePermission("clients.manage");
   const parsed = z.object({ id: z.uuid(), stage: stageSchema }).safeParse({ id, stage });
   if (!parsed.success) return fail("Invalid stage.");
 
@@ -85,7 +85,7 @@ const contactSchema = z.object({
 
 /** A client added by hand (referral, repeat customer) rather than via the intake form. */
 export async function createClientRecord(formData: FormData): Promise<ClientActionResult<{ id: string }>> {
-  await requireAdmin();
+  await requirePermission("clients.manage");
   const parsed = contactSchema.extend({ stage: stageSchema }).safeParse(Object.fromEntries(formData));
   if (!parsed.success) return fail("Please check the highlighted fields.", errorsOf(parsed.error));
 
@@ -110,7 +110,7 @@ export async function createClientRecord(formData: FormData): Promise<ClientActi
 
 /** Deletes a client (e.g. a spam lead). Clients with projects can't be deleted. */
 export async function deleteClientRecord(id: string): Promise<ClientActionResult> {
-  await requireAdmin();
+  await requirePermission("clients.manage");
   if (!z.uuid().safeParse(id).success) return fail("Invalid client.");
 
   const supabase = await createClient();
@@ -135,7 +135,7 @@ export async function deleteClientRecord(id: string): Promise<ClientActionResult
 // -----------------------------------------------------------------------------
 
 export async function updateClientContact(id: string, formData: FormData): Promise<ClientActionResult> {
-  await requireAdmin();
+  await requirePermission("clients.manage");
   const parsed = contactSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return fail("Please check the highlighted fields.", errorsOf(parsed.error));
 
@@ -148,7 +148,7 @@ export async function updateClientContact(id: string, formData: FormData): Promi
 }
 
 export async function updateCallNotes(id: string, notes: string): Promise<ClientActionResult> {
-  await requireAdmin();
+  await requirePermission("clients.manage");
   const parsed = z.string().max(20_000).safeParse(notes);
   if (!parsed.success) return fail("Notes are too long.");
 
@@ -164,7 +164,7 @@ export async function updateCallNotes(id: string, notes: string): Promise<Client
 }
 
 export async function updateDriveFolder(id: string, url: string): Promise<ClientActionResult> {
-  await requireAdmin();
+  await requirePermission("clients.manage");
   const parsed = z
     .preprocess(blankToNull, z.url({ protocol: /^https?$/, error: "Enter a full link starting with https://" }).nullable())
     .safeParse(url);
@@ -183,7 +183,7 @@ export async function setPaymentStatus(
   field: "deposit_status" | "final_status",
   status: string,
 ): Promise<ClientActionResult> {
-  await requireAdmin();
+  await requirePermission("clients.manage");
   const parsed = z
     .object({ field: z.enum(["deposit_status", "final_status"]), status: paymentSchema })
     .safeParse({ field, status });
@@ -205,7 +205,7 @@ export async function setPaymentStatus(
  * Passing null removes the contract. The previous file is deleted either way.
  */
 export async function setContract(id: string, path: string | null): Promise<ClientActionResult> {
-  await requireAdmin();
+  await requirePermission("clients.manage");
   if (path !== null && !path.startsWith(`${id}/`)) return fail("Invalid file location.");
 
   const supabase = await createClient();
@@ -223,7 +223,7 @@ export async function setContract(id: string, path: string | null): Promise<Clie
 }
 
 export async function toggleChecklistItem(itemId: string, done: boolean): Promise<ClientActionResult> {
-  const user = await requireAdmin();
+  const user = await requirePermission("clients.manage");
   if (!z.uuid().safeParse(itemId).success) return fail("Invalid item.");
 
   const supabase = await createClient();

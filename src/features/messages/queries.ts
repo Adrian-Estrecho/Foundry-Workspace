@@ -197,9 +197,9 @@ export async function getEditorConversation(user: CurrentUser, editorId: string)
   };
 }
 
-/** A conversation with a client (admins). */
+/** A conversation with a client (people who manage clients). */
 export async function getClientConversation(user: CurrentUser, clientId: string): Promise<Conversation> {
-  if (!UUID.test(clientId) || user.role !== "admin") notFound();
+  if (!UUID.test(clientId) || !user.permissions.includes("clients.manage")) notFound();
   const supabase = await createClient();
   const [{ data: client }, { data: thread }, { data: portal }] = await Promise.all([
     supabase.from("clients").select("id, company, contact_name, email").eq("id", clientId).maybeSingle(),

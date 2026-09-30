@@ -19,7 +19,7 @@ export default async function EditorThreadPage(props: PageProps<"/messages/team/
   const { renderedAt } = counts;
 
   return (
-    <MessagesFrame tab="team" isAdmin counts={counts}>
+    <MessagesFrame tab="team" isAdmin clients counts={counts}>
       <InboxShell
         selected
         list={

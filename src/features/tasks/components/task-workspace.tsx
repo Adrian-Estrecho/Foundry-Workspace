@@ -19,6 +19,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from "@/components/ui/textarea";
 import { StatusDialog } from "@/features/statuses/components/status-dialog";
 import { StatusManagerDialog, StatusesButton } from "@/features/statuses/components/status-manager";
+import type { TaskAccess } from "../access";
 import { deleteTask, moveTask, reassignTask } from "../actions";
 import { EDITOR_STAGES, TASK_STAGES, type TaskStatus, type TaskStatusDef } from "../constants";
 import type { TaskFormOptions } from "../queries";
@@ -28,7 +29,7 @@ import { TaskFormDialog, type TaskDraft } from "./task-form-dialog";
 type TaskRef = { id: string; title: string; status: TaskStatus; statusInfo: { id: string } };
 
 type Workspace = {
-  isAdmin: boolean;
+  access: TaskAccess;
   today: string;
   options: TaskFormOptions | null;
   /** The workspace's task statuses, in board order. */
@@ -46,9 +47,9 @@ type Workspace = {
   /** Board drop: persists the move, asking for feedback first when dropped on Revisions. */
   dropOnStatus: (task: TaskRef, to: TaskStatusDef, position: number) => Promise<boolean>;
   assign: (task: Pick<TaskRef, "id" | "title">, editorId: string | null, editorName: string) => Promise<boolean>;
-  /** Admins: opens the new-status dialog. */
+  /** People who edit statuses: opens the new-status dialog. */
   addStatus: (stage?: TaskStatus) => void;
-  /** Admins: opens the task status editor. */
+  /** People who edit statuses: opens the task status editor. */
   manageStatuses: () => void;
 };
 
@@ -65,17 +66,18 @@ type Feedback = { task: TaskRef; target: TaskStatusDef; position: number | null;
 /**
  * Shared task behaviour for every view: the new/edit dialog, delete
  * confirmation, and status changes with the rules applied up front (editors
- * stop at the For Review stage; entering Revisions asks the admin what to
- * change). Admins can add a status from here too.
+ * stop at the For Review stage unless they may set any status; entering
+ * Revisions asks the reviewer what to change). People who edit statuses can
+ * add one from here too.
  */
 export function TaskWorkspace({
-  isAdmin,
+  access,
   today,
   options,
   statuses,
   children,
 }: {
-  isAdmin: boolean;
+  access: TaskAccess;
   today: string;
   options: TaskFormOptions | null;
   statuses: TaskStatusDef[];
@@ -89,10 +91,10 @@ export function TaskWorkspace({
   const [newStatus, setNewStatus] = React.useState<{ key: number; stage: TaskStatus } | null>(null);
   const [managing, setManaging] = React.useState(false);
 
-  const canMoveTo = (status: TaskStatusDef) => isAdmin || EDITOR_STAGES.includes(status.stage);
+  const canMoveTo = (status: TaskStatusDef) => access.anyStatus || EDITOR_STAGES.includes(status.stage);
 
   const guard = (task: TaskRef, target: TaskStatusDef) => {
-    if (isAdmin) return true;
+    if (access.anyStatus) return true;
     if (task.status === "done") {
       toast.error("This task is done. Ask an admin to reopen it.");
       return false;
@@ -107,14 +109,14 @@ export function TaskWorkspace({
   const announce = (task: TaskRef, target: TaskStatusDef) =>
     toast.success(`${task.title} moved to ${target.name}`, {
       description:
-        target.stage === "for_review" && task.status !== "for_review" && !isAdmin ? "Your admins have been notified." : undefined,
+        target.stage === "for_review" && task.status !== "for_review" && !access.anyStatus ? "Your admins have been notified." : undefined,
     });
 
   const askFeedback = (task: TaskRef, target: TaskStatusDef, position: number | null) =>
     new Promise<boolean>((resolve) => setFeedback({ task, target, position, resolve }));
 
   const workspace: Workspace = {
-    isAdmin,
+    access,
     today,
     options,
     statuses,
@@ -190,7 +192,7 @@ export function TaskWorkspace({
         />
       )}
 
-      {isAdmin && newStatus && (
+      {access.statuses && newStatus && (
         <StatusDialog
           key={newStatus.key}
           open
@@ -201,7 +203,7 @@ export function TaskWorkspace({
         />
       )}
 
-      {isAdmin && <StatusManagerDialog kind="task" open={managing} onOpenChange={setManaging} />}
+      {access.statuses && <StatusManagerDialog kind="task" open={managing} onOpenChange={setManaging} />}
 
       <RevisionsDialog
         request={feedback}
@@ -240,10 +242,10 @@ export function TaskWorkspace({
   );
 }
 
-/** Admins: the icon next to "New task" that opens the task status editor. */
+/** The icon next to "New task" that opens the task status editor, for people who may edit statuses. */
 export function TaskStatusesButton() {
   const workspace = useTaskWorkspace();
-  return workspace.isAdmin ? <StatusesButton kind="task" onClick={workspace.manageStatuses} /> : null;
+  return workspace.access.statuses ? <StatusesButton kind="task" onClick={workspace.manageStatuses} /> : null;
 }
 
 /** Sending work back: the feedback becomes a comment and goes into the editor's notification. */

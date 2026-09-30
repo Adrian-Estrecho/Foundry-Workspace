@@ -31,22 +31,36 @@ export type RosterEditor = {
   onboarding: { done: number; total: number } | null;
 };
 
+/**
+ * Every editors column but hourly_rate, which people read through
+ * editor_rates() (only those who manage editors get rows).
+ */
+const EDITOR_FIELDS =
+  "id, workspace_id, applicant_id, software, specialties, weekly_hours, work_days, shift_start, is_active, onboarding_completed_at, work_status, current_task_id, current_shift_id, status_since, created_at, updated_at";
+
+async function editorRates() {
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("editor_rates");
+  return new Map((data ?? []).map((row) => [row.editor_id, row.hourly_rate === null ? null : Number(row.hourly_rate)]));
+}
+
 export async function getRoster(user: CurrentUser) {
   const supabase = await createClient();
   const today = todayIn(user.timezone);
   const now = Date.now();
 
-  const [{ data, error }, hours, newApplicants] = await Promise.all([
+  const [{ data, error }, hours, newApplicants, rates] = await Promise.all([
     supabase
       .from("editors")
       .select(
-        `id, software, specialties, hourly_rate, weekly_hours, is_active, work_status,
+        `id, software, specialties, weekly_hours, is_active, work_status,
          profile:profiles!editors_id_fkey(full_name, email, avatar_url, timezone, last_seen_at),
          member:workspace_members!editors_member_fkey(status),
          checklist:editor_checklist_items(is_done)`,
       ),
     supabase.rpc("editor_hours", { p_from: startOfWeek(today), p_to: today, p_tz: user.timezone }),
     supabase.from("applicants").select("id", { count: "exact", head: true }).eq("stage", "applied"),
+    editorRates(),
   ]);
   if (error) throw error;
 
@@ -61,7 +75,7 @@ export async function getRoster(user: CurrentUser) {
       timezone: e.profile?.timezone ?? "UTC",
       software: e.software,
       specialties: e.specialties,
-      hourlyRate: e.hourly_rate,
+      hourlyRate: rates.get(e.id) ?? null,
       weeklyHours: e.weekly_hours,
       isActive: e.is_active,
       workStatus: e.work_status,
@@ -81,17 +95,17 @@ export async function getEditorProfile(id: string, user: CurrentUser) {
   const supabase = await createClient();
   const today = todayIn(user.timezone);
 
-  const [{ data: editor }, { data: tasks }, { data: shifts }, hours, { data: interviews }, { data: notes }, { data: activity }] = await Promise.all([
+  const [{ data: editor }, { data: tasks }, { data: shifts }, hours, { data: interviews }, { data: notes }, { data: activity }, rates] = await Promise.all([
     supabase
       .from("editors")
       .select(
-        `*,
+        `${EDITOR_FIELDS},
          profile:profiles!editors_id_fkey(full_name, email, avatar_url, timezone, phone, last_seen_at),
          checklist:editor_checklist_items(*),
          documents:editor_documents(*),
          payment:editor_payment_details(method, details, updated_at),
          applicant:applicants!editors_applicant_id_fkey(id, created_at, portfolio_url, rating),
-         member:workspace_members!editors_member_fkey(status, joined_at, approved_at)`,
+         member:workspace_members!editors_member_fkey(status, title, joined_at, approved_at)`,
       )
       .eq("id", id)
       .maybeSingle(),
@@ -125,6 +139,7 @@ export async function getEditorProfile(id: string, user: CurrentUser) {
       .eq("entity_id", id)
       .order("created_at", { ascending: false })
       .limit(10),
+    editorRates(),
   ]);
   if (!editor || !editor.profile) notFound();
 
@@ -145,8 +160,12 @@ export async function getEditorProfile(id: string, user: CurrentUser) {
   const onTime = dated.filter((t) => todayIn(editor.profile!.timezone, new Date(t.completed_at!)) <= t.due_date!).length;
 
   return {
-    editor,
+    editor: { ...editor, hourly_rate: rates.get(editor.id) ?? null },
     profile: editor.profile,
+    // Their tasks other than the test edit need tasks.manage (RLS).
+    seesWork: user.permissions.includes("tasks.manage"),
+    // Bank details stay with owners and admins.
+    showPayment: user.role === "admin",
     checklist: [...editor.checklist].sort((a, b) => a.position - b.position),
     documents,
     payment: one(editor.payment),

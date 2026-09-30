@@ -10,16 +10,18 @@ type Tab = "announcements" | "team" | "clients";
 export function MessagesTabs({
   active,
   isAdmin,
+  clients,
   counts,
 }: {
   active: Tab;
   isAdmin: boolean;
+  clients: boolean;
   counts: { announcements: number; team: number; clients: number };
 }) {
   const tabs: { key: Tab; href: string; label: string; count: number }[] = [
     { key: "announcements", href: "/messages", label: "Announcements", count: counts.announcements },
     { key: "team", href: "/messages/team", label: isAdmin ? "Team" : "Admins", count: counts.team },
-    ...(isAdmin ? [{ key: "clients" as const, href: "/messages/clients", label: "Clients", count: counts.clients }] : []),
+    ...(clients ? [{ key: "clients" as const, href: "/messages/clients", label: "Clients", count: counts.clients }] : []),
   ];
 
   return (

@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { fail, type ActionResult } from "@/lib/action-result";
-import { requireAdmin } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { PORTAL_TOKEN } from "./constants";
@@ -66,7 +66,7 @@ function revalidateClient(id: string) {
 
 /** Turns a client's portal on, creating its link the first time. Returns the link's token. */
 export async function openClientPortal(id: string): Promise<ActionResult<{ token: string }>> {
-  await requireAdmin();
+  await requirePermission("clients.manage");
   if (!clientId.safeParse(id).success) return fail("That client isn't available.");
   const supabase = await createClient();
 
@@ -89,7 +89,7 @@ export async function openClientPortal(id: string): Promise<ActionResult<{ token
 
 /** A new link; the old one stops working straight away. */
 export async function resetClientPortal(id: string): Promise<ActionResult<{ token: string }>> {
-  await requireAdmin();
+  await requirePermission("clients.manage");
   if (!clientId.safeParse(id).success) return fail("That client isn't available.");
   const token = newToken();
   const supabase = await createClient();
@@ -103,7 +103,7 @@ export async function resetClientPortal(id: string): Promise<ActionResult<{ toke
 }
 
 export async function closeClientPortal(id: string): Promise<ActionResult> {
-  await requireAdmin();
+  await requirePermission("clients.manage");
   if (!clientId.safeParse(id).success) return fail("That client isn't available.");
   const supabase = await createClient();
   const { error } = await supabase.from("client_portals").update({ enabled: false }).eq("client_id", id);

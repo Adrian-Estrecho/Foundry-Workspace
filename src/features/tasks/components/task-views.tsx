@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { RECENT_DONE_DAYS, TASK_VIEWS, type TaskStatusDef, type TaskView } from "../constants";
 import { taskFiltersQuery, type TaskFilters } from "../filters";
+import type { TaskAccess } from "../access";
 import type { TaskFormOptions, TaskSummary } from "../queries";
 import { TaskBoard } from "./task-board";
 import { TaskCalendar } from "./task-calendar";
@@ -24,8 +25,9 @@ const VIEW_ICONS: Record<TaskView, React.ComponentType<{ className?: string }>> 
   editors: UsersIcon,
 };
 
-/** The admin's Tasks page: four views over the same filters, all kept in the URL. */
+/** The Tasks page (everyone's work): four views over the same filters, all kept in the URL. */
 export function TaskViews({
+  access,
   tasks,
   filters,
   options,
@@ -34,6 +36,7 @@ export function TaskViews({
   month,
   counts,
 }: {
+  access: TaskAccess;
   tasks: TaskSummary[];
   filters: TaskFilters;
   options: TaskFormOptions;
@@ -50,7 +53,7 @@ export function TaskViews({
     startTransition(() => router.replace(`${pathname}${taskFiltersQuery({ ...filters, ...patch })}`, { scroll: false }));
 
   return (
-    <TaskWorkspace isAdmin today={today} options={options} statuses={statuses}>
+    <TaskWorkspace access={access} today={today} options={options} statuses={statuses}>
       <PageHeader
         title="Tasks"
         description={

@@ -4,18 +4,18 @@ import { EmptyState } from "@/components/shared/panel";
 import { InboxList } from "@/features/messages/components/inbox-list";
 import { InboxShell, MessagesFrame } from "@/features/messages/components/messages-frame";
 import { getClientInbox, getInboxCounts } from "@/features/messages/queries";
-import { requireAdmin } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 
 export const metadata: Metadata = { title: "Client messages" };
 
 /** Conversations with clients, who write in from their project portal. */
 export default async function ClientMessagesPage() {
-  const user = await requireAdmin();
+  const user = await requirePermission("clients.manage");
   const counts = await getInboxCounts(user);
   const inbox = await getClientInbox(counts.unreadThreadIds);
 
   return (
-    <MessagesFrame tab="clients" isAdmin counts={counts}>
+    <MessagesFrame tab="clients" isAdmin={user.role === "admin"} clients counts={counts}>
       <InboxShell
         selected={false}
         list={

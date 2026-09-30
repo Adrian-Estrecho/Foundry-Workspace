@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { fail, fieldErrorsOf, type ActionResult } from "@/lib/action-result";
-import { requireAdmin } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { Constants, type Json } from "@/types/database";
 
@@ -45,7 +45,7 @@ function revalidateSops(id?: string) {
 }
 
 export async function createSop(formData: FormData): Promise<ActionResult<{ id: string }>> {
-  const user = await requireAdmin();
+  const user = await requirePermission("sops.manage");
   const parsed = sopSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return fail("Check the highlighted fields.", fieldErrorsOf(parsed.error));
 
@@ -58,7 +58,7 @@ export async function createSop(formData: FormData): Promise<ActionResult<{ id: 
 
 /** Saves an SOP. With "ask everyone to read it again", earlier read receipts are cleared. */
 export async function updateSop(id: string, formData: FormData): Promise<ActionResult> {
-  await requireAdmin();
+  await requirePermission("sops.manage");
   if (!z.uuid().safeParse(id).success) return fail("That SOP isn't available.");
   const parsed = sopSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return fail("Check the highlighted fields.", fieldErrorsOf(parsed.error));
@@ -76,7 +76,7 @@ export async function updateSop(id: string, formData: FormData): Promise<ActionR
 }
 
 export async function deleteSop(id: string): Promise<ActionResult> {
-  await requireAdmin();
+  await requirePermission("sops.manage");
   if (!z.uuid().safeParse(id).success) return fail("That SOP isn't available.");
   const supabase = await createClient();
   const { error, count } = await supabase.from("sops").delete({ count: "exact" }).eq("id", id);

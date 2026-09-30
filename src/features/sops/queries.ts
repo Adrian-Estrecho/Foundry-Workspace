@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 
 /**
  * Every SOP (drafts too) with how many of the workspace's approved editors
- * have read it, for admins.
+ * have read it, for people who manage SOPs.
  */
 export async function getSopAdminList() {
   const supabase = await createClient();
@@ -36,7 +36,7 @@ export async function getSopAdminList() {
   };
 }
 
-/** One SOP to edit (admins). */
+/** One SOP to edit. */
 export async function getSopForEdit(id: string) {
   const supabase = await createClient();
   const { data } = await supabase
@@ -52,19 +52,19 @@ export async function getSopLibrary(user: CurrentUser) {
   const supabase = await createClient();
   const { data } = await supabase
     .from("sops")
-    .select("id, title, category, content, is_required, acknowledgments:sop_acknowledgments(acknowledged_at)")
+    .select("id, title, category, content, is_required, acknowledgments:sop_acknowledgments(editor_id, acknowledged_at)")
     .eq("is_published", true)
     .order("is_required", { ascending: false })
     .order("title");
 
-  // RLS only returns the editor's own acknowledgments.
+  // Their own read receipt (people who manage SOPs can read everyone's).
   const sops = (data ?? []).map((sop) => ({
     id: sop.id,
     title: sop.title,
     category: sop.category,
     content: sop.content,
     required: sop.is_required,
-    acknowledgedAt: user.role === "editor" ? (sop.acknowledgments[0]?.acknowledged_at ?? null) : null,
+    acknowledgedAt: user.role === "editor" ? (sop.acknowledgments.find((a) => a.editor_id === user.id)?.acknowledged_at ?? null) : null,
   }));
   return { sops, renderedAt: Date.now() };
 }

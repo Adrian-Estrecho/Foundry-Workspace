@@ -63,7 +63,8 @@ export function AnnouncementFeed({
   announcements: AnnouncementView[];
   seenAt: string;
   renderedAt: number;
-  viewer: { id: string; isAdmin: boolean };
+  /** canPost: write, pin and remove announcements. isAdmin: also remove anyone's comments. */
+  viewer: { id: string; isAdmin: boolean; canPost: boolean };
 }) {
   const [composeOpen, setComposeOpen] = React.useState(false);
   const [seenBefore] = React.useState(seenAt);
@@ -75,7 +76,7 @@ export function AnnouncementFeed({
 
   return (
     <div className="mx-auto grid max-w-3xl gap-4">
-      {viewer.isAdmin && (
+      {viewer.canPost && (
         <button
           type="button"
           onClick={() => setComposeOpen(true)}
@@ -93,7 +94,7 @@ export function AnnouncementFeed({
           <EmptyState
             icon={MegaphoneIcon}
             title="No announcements yet"
-            description={viewer.isAdmin ? "Post the first one: everyone gets a notification." : "Updates from the admins show up here."}
+            description={viewer.canPost ? "Post the first one: everyone gets a notification." : "Updates from the admins show up here."}
           />
         </div>
       ) : (
@@ -126,7 +127,8 @@ function AnnouncementCard({
   announcement: AnnouncementView;
   isNew: boolean;
   renderedAt: number;
-  viewer: { id: string; isAdmin: boolean };
+  /** canPost: write, pin and remove announcements. isAdmin: also remove anyone's comments. */
+  viewer: { id: string; isAdmin: boolean; canPost: boolean };
 }) {
   const router = useRouter();
   const now = useNow(renderedAt);
@@ -186,7 +188,7 @@ function AnnouncementCard({
               {isNew && <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">New</span>}
             </div>
           </div>
-          {viewer.isAdmin && (
+          {viewer.canPost && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon-sm" aria-label="Announcement actions" disabled={pending}>

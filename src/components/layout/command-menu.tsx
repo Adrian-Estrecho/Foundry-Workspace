@@ -39,10 +39,12 @@ const noopSubscribe = () => () => {};
 /**
  * Global command palette (Ctrl+K / ⌘K). Jump anywhere, switch workspace or
  * theme, sign out. Full members can jump to their open tasks and projects;
- * admins also to any client, editor or applicant.
+ * people who manage clients or editors also to any client, editor or applicant.
  */
 export function CommandMenu({ access, switcher }: { access: NavAccess; switcher: SwitcherProps }) {
-  const { role, onboarding } = access;
+  const { permissions, onboarding } = access;
+  const seesClients = permissions.includes("clients.manage");
+  const seesEditors = permissions.includes("editors.manage");
   const [open, setOpen] = React.useState(false);
   const isMac = React.useSyncExternalStore(
     noopSubscribe,
@@ -84,13 +86,16 @@ export function CommandMenu({ access, switcher }: { access: NavAccess; switcher:
 
   // Load records each time the palette opens, so new leads and applicants are searchable.
   React.useEffect(() => {
-    if (!open || role !== "admin") return;
+    if (!open || (!seesClients && !seesEditors)) return;
     let cancelled = false;
     const supabase = createClient();
+    const none = Promise.resolve({ data: [] });
     void Promise.all([
-      supabase.from("clients").select("id, company, contact_name").order("company"),
-      supabase.from("editors").select("id, profile:profiles!editors_id_fkey(full_name)"),
-      supabase.from("applicants").select("id, full_name").not("stage", "in", "(joined,rejected)").order("full_name"),
+      seesClients ? supabase.from("clients").select("id, company, contact_name").order("company") : none,
+      seesEditors ? supabase.from("editors").select("id, profile:profiles!editors_id_fkey(full_name)") : none,
+      seesEditors
+        ? supabase.from("applicants").select("id, full_name").not("stage", "in", "(joined,rejected)").order("full_name")
+        : none,
     ]).then(([clientRows, editorRows, applicantRows]) => {
       if (cancelled) return;
       setClients((clientRows.data ?? []).map((c) => ({ id: c.id, name: c.company?.trim() || c.contact_name, contact: c.contact_name })));
@@ -104,7 +109,7 @@ export function CommandMenu({ access, switcher }: { access: NavAccess; switcher:
     return () => {
       cancelled = true;
     };
-  }, [open, role]);
+  }, [open, seesClients, seesEditors]);
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -156,12 +161,12 @@ export function CommandMenu({ access, switcher }: { access: NavAccess; switcher:
             {tasks.length > 0 && (
               <>
                 <CommandSeparator />
-                <CommandGroup heading={role === "admin" ? "Open tasks" : "My open tasks"}>
+                <CommandGroup heading={permissions.includes("tasks.manage") ? "Open tasks" : "My open tasks"}>
                   {tasks.map((task) => (
                     <CommandItem
                       key={task.id}
                       value={`task ${task.title} ${task.project ?? ""} ${task.id}`}
-                      onSelect={() => run(() => router.push(task.isTrial && role !== "admin" ? "/onboarding" : `/tasks/${task.id}`))}
+                      onSelect={() => run(() => router.push(task.isTrial && !seesEditors ? "/onboarding" : `/tasks/${task.id}`))}
                     >
                       <ListChecksIcon />
                       <span className="truncate">{task.title}</span>

@@ -5,13 +5,13 @@ import { EditorRoster } from "@/features/editors/components/editor-roster";
 import { EditorsTabs } from "@/features/editors/components/editors-tabs";
 import { getRoster } from "@/features/editors/queries";
 import { getOpenInvitations } from "@/features/invitations/queries";
-import { requireAdmin } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { env } from "@/lib/env";
 
 export const metadata: Metadata = { title: "Editors" };
 
 export default async function EditorsPage() {
-  const user = await requireAdmin();
+  const user = await requirePermission("editors.manage");
   const [{ editors, newApplicants, renderedAt }, invitations] = await Promise.all([getRoster(user), getOpenInvitations()]);
   const active = editors.filter((e) => e.memberStatus === "active" && e.isActive);
   const onboarding = editors.filter((e) => e.memberStatus === "onboarding").length;

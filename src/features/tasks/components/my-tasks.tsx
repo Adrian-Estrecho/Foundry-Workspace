@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { addDays } from "@/lib/dates";
 import { cn } from "@/lib/utils";
+import type { TaskAccess } from "../access";
 import { priorityRank, type TaskStatusDef } from "../constants";
 import type { TaskSummary } from "../queries";
 import { DueChip, PriorityFlag, TaskStatusChip } from "./task-bits";
@@ -32,11 +33,14 @@ const byDue = (a: TaskSummary, b: TaskSummary) =>
 
 /** An editor's own work: overdue, today, upcoming, plus what's waiting on review. */
 export function MyTasks({
+  access,
   tasks,
   statuses,
   today,
   view,
 }: {
+  /** Their own tasks only, but abilities still apply (e.g. marking Done). */
+  access: TaskAccess;
   tasks: TaskSummary[];
   statuses: TaskStatusDef[];
   today: string;
@@ -54,7 +58,7 @@ export function MyTasks({
   const thisWeek = upcoming.filter((t) => t.dueDate && t.dueDate <= addDays(today, 6));
 
   return (
-    <TaskWorkspace isAdmin={false} today={today} options={null} statuses={statuses}>
+    <TaskWorkspace access={access} today={today} options={null} statuses={statuses}>
       <PageHeader
         title="My Tasks"
         description={

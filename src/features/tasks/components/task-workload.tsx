@@ -103,7 +103,7 @@ export function TaskWorkload({ tasks, editors }: { tasks: TaskSummary[]; editors
         <TaskCard
           task={task}
           today={workspace.today}
-          href={taskHref(task, workspace.isAdmin)}
+          href={taskHref(task, workspace.access.manage)}
           show="status"
           overlay={overlay}
           menu={overlay ? null : <TaskMenu task={task} />}

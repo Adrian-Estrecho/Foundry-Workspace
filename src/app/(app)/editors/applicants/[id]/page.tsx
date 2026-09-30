@@ -9,7 +9,7 @@ import { DecisionPanel } from "@/features/applicants/components/detail/decision-
 import { ReviewPanel } from "@/features/applicants/components/detail/review-panel";
 import { getApplicantDetail } from "@/features/applicants/queries";
 import { AnswerList } from "@/features/forms/components/answer-list";
-import { requireAdmin } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { timeAgo } from "@/lib/dates";
 import { localTime } from "@/lib/time-zones";
 
@@ -23,7 +23,7 @@ export async function generateMetadata(props: PageProps<"/editors/applicants/[id
 }
 
 export default async function ApplicantPage(props: PageProps<"/editors/applicants/[id]">) {
-  await requireAdmin();
+  await requirePermission("editors.manage");
   const { id } = await props.params;
   if (!UUID.test(id)) notFound();
 

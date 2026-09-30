@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { fail, fieldErrorsOf, optionalText, optionalUrl, type ActionResult } from "@/lib/action-result";
-import { requireAdmin, type CurrentUser } from "@/lib/auth";
+import { requirePermission, type CurrentUser } from "@/lib/auth";
 import { sendEmail } from "@/lib/email";
 import { env } from "@/lib/env";
 import { adminEmailContext, workspaceLink } from "@/lib/notify";
@@ -74,7 +74,7 @@ async function emailInterview(user: CurrentUser, editorId: string, interview: z.
 
 /** Books an interview (or moves the one already booked) and tells the editor. */
 export async function scheduleInterview(editorId: string, formData: FormData): Promise<ActionResult> {
-  const user = await requireAdmin();
+  const user = await requirePermission("editors.manage");
   if (!idSchema.safeParse(editorId).success) return fail("Invalid editor.");
   const parsed = interviewSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return fail("Please check the highlighted fields.", fieldErrorsOf(parsed.error));
@@ -104,7 +104,7 @@ export async function setInterviewOutcome(
   interviewId: string,
   outcome: "passed" | "failed" | "cancelled",
 ): Promise<ActionResult> {
-  await requireAdmin();
+  await requirePermission("editors.manage");
   const parsed = z
     .object({ id: idSchema, outcome: z.enum(["passed", "failed", "cancelled"]) })
     .safeParse({ id: interviewId, outcome });
@@ -129,7 +129,7 @@ export async function setInterviewOutcome(
 // -----------------------------------------------------------------------------
 
 export async function saveEditorNotes(editorId: string, body: string): Promise<ActionResult> {
-  const user = await requireAdmin();
+  const user = await requirePermission("editors.manage");
   const parsed = z.object({ id: idSchema, body: z.string().max(8000, "Notes are too long.") }).safeParse({ id: editorId, body });
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid notes.");
 
@@ -160,7 +160,7 @@ const DECISION_ERRORS: Record<string, string> = {
 
 /** Full access to the workspace: projects, tasks, attendance, everything. */
 export async function approveEditor(editorId: string): Promise<ActionResult> {
-  const user = await requireAdmin();
+  const user = await requirePermission("editors.manage");
   if (!idSchema.safeParse(editorId).success) return fail("Invalid editor.");
 
   const supabase = await createClient();
@@ -188,7 +188,7 @@ export async function approveEditor(editorId: string): Promise<ActionResult> {
 
 /** Not taken on: their access to this workspace ends. Optionally a polite email. */
 export async function rejectEditor(editorId: string, notify: boolean): Promise<ActionResult> {
-  const user = await requireAdmin();
+  const user = await requirePermission("editors.manage");
   if (!idSchema.safeParse(editorId).success) return fail("Invalid editor.");
 
   const supabase = await createClient();

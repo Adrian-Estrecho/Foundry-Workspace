@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/shared/panel";
 import { Segmented } from "@/components/shared/segmented";
 import { Button } from "@/components/ui/button";
 import { ClickUpMark } from "@/features/clickup/components/clickup-mark";
+import type { TaskAccess } from "@/features/tasks/access";
 import { RECENT_DONE_DAYS, type TaskStatusDef } from "@/features/tasks/constants";
 import type { TaskFormOptions, TaskSummary } from "@/features/tasks/queries";
 import { TaskBoard } from "@/features/tasks/components/task-board";
@@ -20,7 +21,7 @@ import { TaskStatusesButton, TaskWorkspace, useTaskWorkspace } from "@/features/
 export function ProjectTasks({
   projectId,
   tasks,
-  isAdmin,
+  access,
   today,
   doneSince,
   options,
@@ -28,7 +29,7 @@ export function ProjectTasks({
 }: {
   projectId: string;
   tasks: TaskSummary[];
-  isAdmin: boolean;
+  access: TaskAccess;
   today: string;
   /** Done tasks completed before this (ISO time) stay off the board. */
   doneSince: string;
@@ -56,11 +57,11 @@ export function ProjectTasks({
     );
 
   return (
-    <TaskWorkspace isAdmin={isAdmin} today={today} options={options} statuses={statuses}>
+    <TaskWorkspace access={access} today={today} options={options} statuses={statuses}>
       <section aria-labelledby="project-tasks" className="min-w-0">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <h2 id="project-tasks" className="mr-auto font-heading text-lg font-medium">
-            {isAdmin ? "Tasks" : "Your tasks"}
+            {access.manage ? "Tasks" : "Your tasks"}
             <span className="ml-2 text-sm font-normal text-muted-foreground">
               {open} open · {tasks.length - open} done
             </span>
@@ -75,7 +76,7 @@ export function ProjectTasks({
             ]}
           />
           <TaskStatusesButton />
-          {isAdmin && addTask()}
+          {access.manage && addTask()}
         </div>
 
         {tasks.length === 0 ? (
@@ -84,13 +85,13 @@ export function ProjectTasks({
               icon={ListTodoIcon}
               title="No tasks yet"
               description={
-                isAdmin
+                access.manage
                   ? fromClickUp
                     ? "Tasks show up here when they reach the start status in ClickUp."
                     : "Break the project into tasks and assign them to editors."
                   : "Tasks assigned to you on this project show up here."
               }
-              action={isAdmin ? addTask("Add the first task") : undefined}
+              action={access.manage ? addTask("Add the first task") : undefined}
             />
           </div>
         ) : view === "board" ? (

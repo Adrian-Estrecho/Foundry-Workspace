@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { fail, fieldErrorsOf } from "@/lib/action-result";
-import { requireAdmin } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -51,7 +51,7 @@ function revalidateProject(id?: string, clientId?: string) {
 
 /** Creates a project for a client and assigns its editors. */
 export async function createProject(formData: FormData): Promise<ProjectActionResult> {
-  const user = await requireAdmin();
+  const user = await requirePermission("tasks.manage");
   const parsed = parseProject(formData);
   if (!parsed.success) return fail("Please check the highlighted fields.", fieldErrorsOf(parsed.error));
 
@@ -81,7 +81,7 @@ export async function createProject(formData: FormData): Promise<ProjectActionRe
  * was open (e.g. through a new task) stays on the team.
  */
 export async function updateProject(id: string, formData: FormData): Promise<ProjectActionResult> {
-  await requireAdmin();
+  await requirePermission("tasks.manage");
   if (!z.uuid().safeParse(id).success) return fail("Invalid project.");
   const parsed = parseProject(formData);
   if (!parsed.success) return fail("Please check the highlighted fields.", fieldErrorsOf(parsed.error));
@@ -121,7 +121,7 @@ export async function updateProject(id: string, formData: FormData): Promise<Pro
 
 /** Moves the project to one of the workspace's project statuses (the stage follows). */
 export async function setProjectStatus(id: string, statusId: string): Promise<ProjectActionResult> {
-  await requireAdmin();
+  await requirePermission("tasks.manage");
   const parsed = z.object({ id: z.uuid(), statusId: z.uuid() }).safeParse({ id, statusId });
   if (!parsed.success) return fail("Invalid status.");
 
@@ -141,7 +141,7 @@ export async function setProjectStatus(id: string, statusId: string): Promise<Pr
 
 /** Deletes a project with its tasks (and their files). Logged time stays, unlinked. */
 export async function deleteProject(id: string): Promise<ProjectActionResult> {
-  await requireAdmin();
+  await requirePermission("tasks.manage");
   if (!z.uuid().safeParse(id).success) return fail("Invalid project.");
 
   const supabase = await createClient();
@@ -156,7 +156,7 @@ export async function deleteProject(id: string): Promise<ProjectActionResult> {
   if (!data) return fail("That project no longer exists.");
 
   // Storage policies only reach files of tasks that still exist, so the
-  // cleanup runs as the service role, on paths this admin could read above.
+  // cleanup runs as the service role, on paths this person could read above.
   const paths = (files ?? []).map((f) => f.storage_path).filter((p): p is string => Boolean(p));
   if (paths.length) await createAdminClient().storage.from("task-files").remove(paths);
 

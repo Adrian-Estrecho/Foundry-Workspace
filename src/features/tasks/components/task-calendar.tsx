@@ -187,7 +187,7 @@ export function TaskCalendar({
                     {byDay.get(day)!.map((task) => (
                       <li key={task.id}>
                         <Link
-                          href={taskHref(task, workspace.isAdmin)}
+                          href={taskHref(task, workspace.access.manage)}
                           className="flex items-center gap-3 rounded-lg bg-card px-3 py-2.5 ring-1 ring-border hover:bg-accent/50"
                         >
                           <span className="min-w-0 flex-1">
@@ -217,7 +217,7 @@ export function TaskCalendar({
 
 function DayCell({ day, inMonth, isToday, tasks }: { day: string; inMonth: boolean; isToday: boolean; tasks: TaskSummary[] }) {
   const workspace = useTaskWorkspace();
-  const { setNodeRef, isOver } = useDroppable({ id: DAY_PREFIX + day, disabled: !workspace.isAdmin });
+  const { setNodeRef, isOver } = useDroppable({ id: DAY_PREFIX + day, disabled: !workspace.access.manage });
   const hidden = tasks.length - VISIBLE_PER_DAY;
   const label = formatDay(day, { weekday: "long", month: "long", day: "numeric" });
 
@@ -241,7 +241,7 @@ function DayCell({ day, inMonth, isToday, tasks }: { day: string; inMonth: boole
         >
           {Number(day.slice(8))}
         </span>
-        {workspace.isAdmin && (
+        {workspace.access.manage && (
           <Button
             variant="ghost"
             size="icon-xs"
@@ -269,7 +269,7 @@ function DayCell({ day, inMonth, isToday, tasks }: { day: string; inMonth: boole
               {tasks.map((task) => (
                 <li key={task.id}>
                   <Link
-                    href={taskHref(task, workspace.isAdmin)}
+                    href={taskHref(task, workspace.access.manage)}
                     className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-sm hover:bg-accent"
                   >
                     <span className="min-w-0 flex-1 truncate">{task.title}</span>
@@ -287,9 +287,9 @@ function DayCell({ day, inMonth, isToday, tasks }: { day: string; inMonth: boole
 
 function CalendarChip({ task }: { task: TaskSummary }) {
   const workspace = useTaskWorkspace();
-  const { listeners, setNodeRef, isDragging } = useDraggable({ id: task.id, disabled: !workspace.isAdmin });
+  const { listeners, setNodeRef, isDragging } = useDraggable({ id: task.id, disabled: !workspace.access.manage });
   return (
-    <Link ref={setNodeRef} href={taskHref(task, workspace.isAdmin)} draggable={false} className={cn("block rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring", isDragging && "opacity-35")} {...listeners}>
+    <Link ref={setNodeRef} href={taskHref(task, workspace.access.manage)} draggable={false} className={cn("block rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring", isDragging && "opacity-35")} {...listeners}>
       <ChipBody task={task} today={workspace.today} />
     </Link>
   );
