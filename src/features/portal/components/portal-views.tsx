@@ -18,24 +18,19 @@ import {
 import { EmptyState } from "@/components/shared/panel";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { StatusChip, StatusDot } from "@/features/statuses/components/status-chip";
+import { statusColor } from "@/features/statuses/constants";
 import { monthGrid, monthLabel, shiftMonth } from "@/features/tasks/calendar";
 import { DueChip, PriorityFlag } from "@/features/tasks/components/task-bits";
-import { priorityRank } from "@/features/tasks/constants";
+import { priorityRank, type TaskStatusDef } from "@/features/tasks/constants";
 import { formatDay, timeAgo } from "@/lib/dates";
 import { cn } from "@/lib/utils";
-import { PORTAL_PROJECT_STATUS, PORTAL_TASK_STATUSES, portalStatus } from "../constants";
 import { portalHref, type PortalLink } from "../links";
 import type { PortalProject, PortalTask } from "../queries";
 
-export function PortalStatusChip({ status, className }: { status: PortalTask["status"]; className?: string }) {
-  const meta = portalStatus(status);
-  return (
-    <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ring-1", meta.chip, className)}>
-      <span className={cn("size-1.5 rounded-full", meta.dot)} />
-      {meta.label}
-    </span>
-  );
-}
+/** The status a task sits in on the board. One whose status can't be read goes to the first status of its stage. */
+const columnOf = (task: PortalTask, statuses: TaskStatusDef[]) =>
+  statuses.find((s) => s.id === task.statusInfo.id)?.id ?? statuses.find((s) => s.stage === task.status)?.id;
 
 function Checklist({ subtasks }: { subtasks: PortalTask["subtasks"] }) {
   if (subtasks.total === 0) return null;
@@ -117,9 +112,7 @@ export function PortalOverview({
                   >
                     <div className="flex items-start justify-between gap-3">
                       <p className="min-w-0 font-medium">{project.name}</p>
-                      <span className="shrink-0 rounded-full bg-card px-2.5 py-0.5 text-xs font-medium ring-1 ring-border">
-                        {PORTAL_PROJECT_STATUS[project.status]}
-                      </span>
+                      <StatusChip status={project.statusInfo} className="max-w-[55%] shrink-0" />
                     </div>
                     <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-foreground/10" aria-label={`${pct}% of tasks done`}>
                       <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
@@ -159,7 +152,7 @@ export function PortalOverview({
                     <span className="block truncate text-sm font-medium">{task.title}</span>
                     <span className="block truncate text-xs text-muted-foreground">{task.projectName}</span>
                   </span>
-                  <PortalStatusChip status={task.status} className="hidden sm:inline-flex" />
+                  <StatusChip status={task.statusInfo} className="hidden sm:inline-flex" />
                   <DueChip dueDate={task.dueDate} today={today} done={false} />
                 </li>
               ))}
@@ -219,63 +212,83 @@ function Stat({ label, value, icon: Icon }: { label: string; value: number; icon
 // -----------------------------------------------------------------------------
 // Board
 // -----------------------------------------------------------------------------
-/** Done keeps the most recent few; the list has the rest. */
+/** Done columns keep the most recent few; the list has the rest. */
 const DONE_ON_BOARD = 8;
 
-export function PortalBoard({ tasks, today, showProject, link }: { tasks: PortalTask[]; today: string; showProject: boolean; link: PortalLink }) {
+/** A column per workspace status, in the order the team arranged them on their own board. */
+export function PortalBoard({
+  tasks,
+  statuses,
+  today,
+  showProject,
+  link,
+}: {
+  tasks: PortalTask[];
+  statuses: TaskStatusDef[];
+  today: string;
+  showProject: boolean;
+  link: PortalLink;
+}) {
   return (
-    <div className="-mx-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
-      <div className="grid min-w-[62rem] grid-cols-5 gap-3">
-        {PORTAL_TASK_STATUSES.map((status) => {
-          const all = tasks
-            .filter((t) => t.status === status.value)
-            .sort((a, b) =>
-              status.value === "done"
-                ? (b.completedAt ?? "").localeCompare(a.completedAt ?? "")
-                : (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999") || priorityRank(b.priority) - priorityRank(a.priority),
-            );
-          const column = status.value === "done" ? all.slice(0, DONE_ON_BOARD) : all;
-          return (
-            <section key={status.value} aria-label={status.label} className="flex min-w-0 flex-col">
-              <header className="mb-2 flex items-center gap-2 px-1 text-sm">
-                <span className={cn("size-2 rounded-full", status.dot)} />
-                <span className="font-medium">{status.label}</span>
-                <span className="text-muted-foreground tabular">{all.length}</span>
-              </header>
-              <ul className="grid grid-cols-1 content-start gap-2">
-                {column.map((task) => (
-                  <li key={task.id} className="rounded-xl border bg-card p-3.5">
-                    {showProject && <p className="truncate text-xs text-muted-foreground">{task.projectName}</p>}
-                    <p
-                      className={cn(
-                        "mt-0.5 line-clamp-3 leading-snug font-medium",
-                        task.status === "done" && "text-muted-foreground line-through decoration-muted-foreground/40",
-                      )}
-                    >
-                      {task.title}
-                    </p>
-                    <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-                      {task.status !== "done" && task.priority !== "medium" && task.priority !== "low" && <PriorityFlag priority={task.priority} />}
-                      <DueChip dueDate={task.dueDate} today={today} done={task.status === "done"} />
-                      <Checklist subtasks={task.subtasks} />
-                    </div>
-                  </li>
-                ))}
-                {column.length === 0 && (
-                  <li className="rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground">Nothing here</li>
-                )}
-                {all.length > column.length && (
-                  <li>
-                    <Link href={portalHref(link, "list")} className="block rounded-lg p-2 text-center text-xs text-muted-foreground hover:text-foreground">
-                      {all.length - column.length} more in the list
-                    </Link>
-                  </li>
-                )}
-              </ul>
-            </section>
+    <div
+      role="region"
+      aria-label="Task board"
+      className="-mx-4 flex snap-x snap-mandatory scroll-px-4 items-start gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:scroll-px-0 sm:px-0 lg:snap-none"
+    >
+      {statuses.map((status) => {
+        const finished = status.stage === "done";
+        const all = tasks
+          .filter((t) => columnOf(t, statuses) === status.id)
+          .sort((a, b) =>
+            finished
+              ? (b.completedAt ?? "").localeCompare(a.completedAt ?? "")
+              : (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999") || priorityRank(b.priority) - priorityRank(a.priority),
           );
-        })}
-      </div>
+        const column = finished ? all.slice(0, DONE_ON_BOARD) : all;
+        return (
+          <section
+            key={status.id}
+            aria-label={status.name}
+            className="flex w-[82vw] max-w-80 shrink-0 snap-start flex-col sm:w-auto sm:max-w-none sm:min-w-48 sm:flex-1 sm:basis-0"
+          >
+            <header className="mb-2 flex items-center gap-2 px-1 text-sm">
+              <StatusDot color={status.color} />
+              <span className="truncate font-medium">{status.name}</span>
+              <span className="text-muted-foreground tabular">{all.length}</span>
+            </header>
+            <ul className="grid grid-cols-1 content-start gap-2">
+              {column.map((task) => (
+                <li key={task.id} className="rounded-xl border bg-card p-3.5">
+                  {showProject && <p className="truncate text-xs text-muted-foreground">{task.projectName}</p>}
+                  <p
+                    className={cn(
+                      "mt-0.5 line-clamp-3 leading-snug font-medium",
+                      task.status === "done" && "text-muted-foreground line-through decoration-muted-foreground/40",
+                    )}
+                  >
+                    {task.title}
+                  </p>
+                  <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    {task.status !== "done" && task.priority !== "medium" && task.priority !== "low" && <PriorityFlag priority={task.priority} />}
+                    <DueChip dueDate={task.dueDate} today={today} done={task.status === "done"} />
+                    <Checklist subtasks={task.subtasks} />
+                  </div>
+                </li>
+              ))}
+              {column.length === 0 && (
+                <li className="rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground">Nothing here</li>
+              )}
+              {all.length > column.length && (
+                <li>
+                  <Link href={portalHref(link, "list")} className="block rounded-lg p-2 text-center text-xs text-muted-foreground hover:text-foreground">
+                    {all.length - column.length} more in the list
+                  </Link>
+                </li>
+              )}
+            </ul>
+          </section>
+        );
+      })}
     </div>
   );
 }
@@ -284,12 +297,24 @@ export function PortalBoard({ tasks, today, showProject, link }: { tasks: Portal
 // List
 // -----------------------------------------------------------------------------
 type SortKey = "title" | "project" | "status" | "due";
-const statusIndex = (status: PortalTask["status"]) => PORTAL_TASK_STATUSES.findIndex((s) => s.value === status);
 
-export function PortalList({ tasks, today, showProject }: { tasks: PortalTask[]; today: string; showProject: boolean }) {
+export function PortalList({
+  tasks,
+  statuses,
+  today,
+  showProject,
+}: {
+  tasks: PortalTask[];
+  statuses: TaskStatusDef[];
+  today: string;
+  showProject: boolean;
+}) {
   const [sort, setSort] = React.useState<{ key: SortKey; dir: 1 | -1 }>({ key: "due", dir: 1 });
 
   const sorted = React.useMemo(() => {
+    // Statuses sort in the board's order.
+    const order = new Map(statuses.map((status, index) => [status.id, index]));
+    const statusIndex = (task: PortalTask) => order.get(columnOf(task, statuses) ?? "") ?? statuses.length;
     const compare = (a: PortalTask, b: PortalTask) => {
       switch (sort.key) {
         case "title":
@@ -297,7 +322,7 @@ export function PortalList({ tasks, today, showProject }: { tasks: PortalTask[];
         case "project":
           return a.projectName.localeCompare(b.projectName);
         case "status":
-          return statusIndex(a.status) - statusIndex(b.status);
+          return statusIndex(a) - statusIndex(b);
         case "due":
           if (a.dueDate === b.dueDate) return 0;
           if (!a.dueDate) return 1;
@@ -306,7 +331,7 @@ export function PortalList({ tasks, today, showProject }: { tasks: PortalTask[];
       }
     };
     return [...tasks].sort((a, b) => compare(a, b) * sort.dir);
-  }, [tasks, sort]);
+  }, [tasks, statuses, sort]);
 
   if (tasks.length === 0) {
     return (
@@ -357,12 +382,12 @@ export function PortalList({ tasks, today, showProject }: { tasks: PortalTask[];
                     <Checklist subtasks={task.subtasks} />
                   </span>
                   <span className="mt-1.5 block md:hidden">
-                    <PortalStatusChip status={task.status} />
+                    <StatusChip status={task.statusInfo} />
                   </span>
                 </td>
                 {showProject && <td className="hidden truncate px-3 py-2.5 text-muted-foreground lg:table-cell">{task.projectName}</td>}
                 <td className="hidden px-3 py-2.5 md:table-cell">
-                  <PortalStatusChip status={task.status} />
+                  <StatusChip status={task.statusInfo} />
                 </td>
                 <td className="px-3 py-2.5">
                   {task.dueDate ? <DueChip dueDate={task.dueDate} today={today} done={done} /> : <span className="text-xs text-muted-foreground">—</span>}
@@ -465,7 +490,7 @@ export function PortalCalendar({
                         {list.map((task) => (
                           <li key={task.id} className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-sm">
                             <span className="min-w-0 flex-1 truncate">{task.title}</span>
-                            <PortalStatusChip status={task.status} />
+                            <StatusChip status={task.statusInfo} />
                           </li>
                         ))}
                       </ul>
@@ -500,7 +525,7 @@ export function PortalCalendar({
                         </span>
                         <span className="block truncate text-xs text-muted-foreground">{task.projectName}</span>
                       </span>
-                      <PortalStatusChip status={task.status} />
+                      <StatusChip status={task.statusInfo} />
                     </li>
                   ))}
                 </ul>
@@ -516,7 +541,7 @@ export function PortalCalendar({
 function CalendarChip({ task, today }: { task: PortalTask; today: string }) {
   const done = task.status === "done";
   const overdue = !done && task.dueDate !== null && task.dueDate < today;
-  const meta = portalStatus(task.status);
+  const color = statusColor(task.statusInfo.color);
   return (
     <span
       className={cn(
@@ -524,9 +549,9 @@ function CalendarChip({ task, today }: { task: PortalTask; today: string }) {
         overdue && "text-danger ring-danger/30",
         done && "text-muted-foreground",
       )}
-      title={`${task.title} · ${meta.label} · ${task.projectName}`}
+      title={`${task.title} · ${task.statusInfo.name} · ${task.projectName}`}
     >
-      <span className={cn("size-1.5 shrink-0 rounded-full", meta.dot)} />
+      <span className={cn("size-1.5 shrink-0 rounded-full", color.dot)} />
       <span className={cn("truncate", done && "line-through decoration-muted-foreground/40")}>{task.title}</span>
     </span>
   );

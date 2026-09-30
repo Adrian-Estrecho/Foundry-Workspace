@@ -16,11 +16,11 @@ import { StatusList } from "./status-list";
 const COPY: Record<StatusKind, { title: string; description: string }> = {
   task: {
     title: "Task statuses",
-    description: "The board's columns and the choices on every task.",
+    description: "The board's columns and the choices on every task. Clients see them in their portal too.",
   },
   project: {
     title: "Project statuses",
-    description: "Where each project is. Clients see a simpler version in their portal.",
+    description: "Where each project is. Clients see them in their portal too.",
   },
 };
 

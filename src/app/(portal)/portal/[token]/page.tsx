@@ -150,8 +150,8 @@ export default async function PortalPage(props: PageProps<"/portal/[token]">) {
           unread={portal.unread}
         />
       )}
-      {view === "board" && <PortalBoard tasks={tasks} today={portal.today} showProject={!project && portal.projects.length > 1} link={link} />}
-      {view === "list" && <PortalList tasks={tasks} today={portal.today} showProject={!project && portal.projects.length > 1} />}
+      {view === "board" && <PortalBoard tasks={tasks} statuses={portal.taskStatuses} today={portal.today} showProject={!project && portal.projects.length > 1} link={link} />}
+      {view === "list" && <PortalList tasks={tasks} statuses={portal.taskStatuses} today={portal.today} showProject={!project && portal.projects.length > 1} />}
       {view === "calendar" && <PortalCalendar tasks={tasks} today={portal.today} month={month} link={link} />}
       {view === "messages" && (
         <PortalMessages
