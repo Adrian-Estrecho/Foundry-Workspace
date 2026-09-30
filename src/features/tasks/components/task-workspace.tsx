@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusDialog } from "@/features/statuses/components/status-dialog";
+import { StatusManagerDialog, StatusesButton } from "@/features/statuses/components/status-manager";
 import { deleteTask, moveTask, reassignTask } from "../actions";
 import { EDITOR_STAGES, TASK_STAGES, type TaskStatus, type TaskStatusDef } from "../constants";
 import type { TaskFormOptions } from "../queries";
@@ -47,6 +48,8 @@ type Workspace = {
   assign: (task: Pick<TaskRef, "id" | "title">, editorId: string | null, editorName: string) => Promise<boolean>;
   /** Admins: opens the new-status dialog. */
   addStatus: (stage?: TaskStatus) => void;
+  /** Admins: opens the task status editor. */
+  manageStatuses: () => void;
 };
 
 const WorkspaceContext = React.createContext<Workspace | null>(null);
@@ -84,6 +87,7 @@ export function TaskWorkspace({
   const [deleting, startDelete] = React.useTransition();
   const [feedback, setFeedback] = React.useState<Feedback | null>(null);
   const [newStatus, setNewStatus] = React.useState<{ key: number; stage: TaskStatus } | null>(null);
+  const [managing, setManaging] = React.useState(false);
 
   const canMoveTo = (status: TaskStatusDef) => isAdmin || EDITOR_STAGES.includes(status.stage);
 
@@ -156,6 +160,7 @@ export function TaskWorkspace({
       return true;
     },
     addStatus: (stage = "in_progress") => setNewStatus((s) => ({ key: (s?.key ?? 0) + 1, stage })),
+    manageStatuses: () => setManaging(true),
   };
 
   const remove = () =>
@@ -196,6 +201,8 @@ export function TaskWorkspace({
         />
       )}
 
+      {isAdmin && <StatusManagerDialog kind="task" open={managing} onOpenChange={setManaging} />}
+
       <RevisionsDialog
         request={feedback}
         onDone={(ok) => {
@@ -231,6 +238,12 @@ export function TaskWorkspace({
       </AlertDialog>
     </WorkspaceContext.Provider>
   );
+}
+
+/** Admins: the icon next to "New task" that opens the task status editor. */
+export function TaskStatusesButton() {
+  const workspace = useTaskWorkspace();
+  return workspace.isAdmin ? <StatusesButton kind="task" onClick={workspace.manageStatuses} /> : null;
 }
 
 /** Sending work back: the feedback becomes a comment and goes into the editor's notification. */

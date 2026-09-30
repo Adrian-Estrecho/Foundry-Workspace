@@ -7,7 +7,8 @@ import { fail, fieldErrorsOf, type ActionResult } from "@/lib/action-result";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { Constants } from "@/types/database";
-import { STATUS_COLOR_KEYS, STATUS_NAME_MAX, type StatusKind } from "./constants";
+import { STATUS_COLOR_KEYS, STATUS_NAME_MAX, type StatusDef, type StatusKind } from "./constants";
+import { getStatusesInUse, type StatusInUse } from "./queries";
 
 /**
  * Owners and admins manage the workspace's task and project statuses. RLS
@@ -36,6 +37,17 @@ const revalidateStatuses = () => revalidatePath("/", "layout");
 
 const valid = (kind: StatusKind, id: string | null) =>
   kindSchema.safeParse(kind).success && (id === null || idSchema.safeParse(id).success);
+
+/** The statuses with how much is in each, for the status editor. */
+export async function loadStatuses(kind: StatusKind): Promise<ActionResult<StatusInUse<StatusDef>[]>> {
+  await requireAdmin();
+  if (!valid(kind, null)) return fail("Invalid status.");
+  try {
+    return { ok: true, data: await getStatusesInUse(kind) };
+  } catch {
+    return fail("Couldn't load the statuses. Try again.");
+  }
+}
 
 /** Adds a status (id null) or saves changes to one. A new one goes after the last status of its stage. */
 export async function saveStatus(kind: StatusKind, id: string | null, formData: FormData): Promise<ActionResult<{ id: string }>> {

@@ -26,6 +26,7 @@ export function StatusDialog({
   lockedReason,
   open,
   onOpenChange,
+  onSaved,
 }: {
   kind: StatusKind;
   stages: StageInfo[];
@@ -36,6 +37,7 @@ export function StatusDialog({
   lockedReason?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSaved?: () => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
@@ -58,6 +60,7 @@ export function StatusDialog({
       });
       onOpenChange(false);
       router.refresh();
+      onSaved?.();
     });
 
   return (

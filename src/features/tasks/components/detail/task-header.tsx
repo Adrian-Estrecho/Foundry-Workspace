@@ -117,10 +117,8 @@ export function TaskHeader({
               {workspace.isAdmin && (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link href="/workspace/statuses">
-                      <Settings2Icon /> Edit statuses
-                    </Link>
+                  <DropdownMenuItem onSelect={() => workspace.manageStatuses()}>
+                    <Settings2Icon /> Edit statuses
                   </DropdownMenuItem>
                 </>
               )}

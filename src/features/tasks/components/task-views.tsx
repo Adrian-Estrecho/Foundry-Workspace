@@ -15,7 +15,7 @@ import { TaskCalendar } from "./task-calendar";
 import { TaskFilterBar } from "./task-filters";
 import { TaskList } from "./task-list";
 import { TaskWorkload } from "./task-workload";
-import { TaskWorkspace, useTaskWorkspace } from "./task-workspace";
+import { TaskStatusesButton, TaskWorkspace, useTaskWorkspace } from "./task-workspace";
 
 const VIEW_ICONS: Record<TaskView, React.ComponentType<{ className?: string }>> = {
   board: KanbanSquareIcon,
@@ -65,7 +65,12 @@ export function TaskViews({
             </Link>
           </>
         }
-        actions={<NewTaskButton filters={filters} />}
+        actions={
+          <>
+            <TaskStatusesButton />
+            <NewTaskButton filters={filters} />
+          </>
+        }
       />
 
       <nav aria-label="Task views" className="mb-4 inline-flex max-w-full overflow-x-auto rounded-lg bg-muted p-0.5 scrollbar-none">

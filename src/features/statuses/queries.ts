@@ -3,7 +3,7 @@ import { cache } from "react";
 import type { ProjectStatusDef } from "@/features/projects/constants";
 import type { TaskStatusDef } from "@/features/tasks/constants";
 import { createClient } from "@/lib/supabase/server";
-import type { StatusColor } from "./constants";
+import type { StatusColor, StatusDef, StatusKind } from "./constants";
 
 /** A status in the settings list, with how many tasks or projects are in it. */
 export type StatusInUse<T> = T & { count: number };
@@ -41,28 +41,23 @@ export const getProjectStatuses = cache(async (): Promise<ProjectStatusDef[]> =>
   return (data ?? []).map(toDef);
 });
 
-/** Both lists with usage counts, for the Workspace page (admins see every task). */
-export async function getStatusSettings() {
+/** One kind's statuses with how much is in each, for the status editor (admins see everything). */
+export async function getStatusesInUse(kind: StatusKind): Promise<StatusInUse<StatusDef>[]> {
   const supabase = await createClient();
-  const [tasks, projects] = await Promise.all([
-    supabase
+  if (kind === "task") {
+    const { data, error } = await supabase
       .from("task_statuses")
       .select("id, name, color, stage, position, tasks(count)")
       .order("position")
-      .order("created_at"),
-    supabase
-      .from("project_statuses")
-      .select("id, name, color, stage, position, projects(count)")
-      .order("position")
-      .order("created_at"),
-  ]);
-  if (tasks.error) throw tasks.error;
-  if (projects.error) throw projects.error;
-
-  return {
-    tasks: (tasks.data ?? []).map((row): StatusInUse<TaskStatusDef> => ({ ...toDef(row), count: row.tasks[0]?.count ?? 0 })),
-    projects: (projects.data ?? []).map(
-      (row): StatusInUse<ProjectStatusDef> => ({ ...toDef(row), count: row.projects[0]?.count ?? 0 }),
-    ),
-  };
+      .order("created_at");
+    if (error) throw error;
+    return (data ?? []).map((row) => ({ ...toDef(row), count: row.tasks[0]?.count ?? 0 }));
+  }
+  const { data, error } = await supabase
+    .from("project_statuses")
+    .select("id, name, color, stage, position, projects(count)")
+    .order("position")
+    .order("created_at");
+  if (error) throw error;
+  return (data ?? []).map((row) => ({ ...toDef(row), count: row.projects[0]?.count ?? 0 }));
 }

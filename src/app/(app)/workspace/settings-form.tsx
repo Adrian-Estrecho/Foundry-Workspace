@@ -14,7 +14,6 @@ import {
   FileSignatureIcon,
   FilmIcon,
   FolderOpenIcon,
-  KanbanSquareIcon,
   Link2Icon,
   Loader2Icon,
   PackageIcon,
@@ -30,9 +29,6 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { FORM_NAMES, type FormKind } from "@/features/forms/fields";
-import type { ProjectStatusDef } from "@/features/projects/constants";
-import { StatusSummary } from "@/features/statuses/components/status-summary";
-import type { TaskStatusDef } from "@/features/tasks/constants";
 import type { Workspace } from "@/lib/auth";
 import { formatDay } from "@/lib/dates";
 import { cn } from "@/lib/utils";
@@ -74,7 +70,6 @@ const SECTIONS = [
   { id: "onboarding", label: "Onboarding", icon: PackageIcon, fields: ["contract_template_url", "frameio_invite_url", "asset_pack_url"] },
   { id: "attendance", label: "Attendance", icon: Clock3Icon, fields: ["missed_clock_in_grace_minutes"] },
   { id: "hiring", label: "Test edit", icon: ClapperboardIcon, fields: TEST_FIELDS },
-  { id: "statuses", label: "Statuses", icon: KanbanSquareIcon, fields: [] },
 ] as const satisfies { id: string; label: string; icon: LucideIcon; fields: readonly Field[] }[];
 const SECTION_IDS = SECTIONS.map((s) => s.id);
 
@@ -135,14 +130,12 @@ export function WorkspaceSettings({
   logoUrl,
   siteUrl,
   formSummaries,
-  statuses,
 }: {
   workspace: Workspace;
   template: TestTemplate | null;
   logoUrl: string | null;
   siteUrl: string;
   formSummaries: Record<FormKind, FormSummary>;
-  statuses: { tasks: TaskStatusDef[]; projects: ProjectStatusDef[] };
 }) {
   const router = useRouter();
   const formRef = React.useRef<HTMLFormElement>(null);
@@ -228,7 +221,7 @@ export function WorkspaceSettings({
   const linksLive = values.slug === saved.slug;
   const resourcesAdded = RESOURCES.filter((r) => isLink(values[r.field])).length;
   const graceMinutes = Math.min(Math.max(Math.round(Number(values.missed_clock_in_grace_minutes)) || 0, 0), 720);
-  const [brand, links, formsSection, onboarding, attendance, hiring, statusesSection] = SECTIONS;
+  const [brand, links, formsSection, onboarding, attendance, hiring] = SECTIONS;
 
   return (
     <form
@@ -469,17 +462,6 @@ export function WorkspaceSettings({
                 </span>
               </span>
             </FormRow>
-          </div>
-        </Section>
-
-        <Section
-          section={statusesSection}
-          className="2xl:col-span-2"
-          description="The steps tasks and projects move through. Add your own, like Color grading or Waiting on footage."
-        >
-          <div className="grid gap-3 2xl:grid-cols-2">
-            <StatusSummary label="Task statuses" statuses={statuses.tasks} href="/workspace/statuses#tasks" />
-            <StatusSummary label="Project statuses" statuses={statuses.projects} href="/workspace/statuses#projects" />
           </div>
         </Section>
 

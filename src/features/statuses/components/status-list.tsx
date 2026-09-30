@@ -45,7 +45,18 @@ const count = (n: number, kind: StatusKind) => `${n} ${kind}${n === 1 ? "" : "s"
  * arrows) to reorder, and add, edit and remove statuses; changes save
  * straight away. Each row shows its stage, which decides how it behaves.
  */
-export function StatusList({ kind, stages, statuses }: { kind: StatusKind; stages: StageInfo[]; statuses: Status[] }) {
+export function StatusList({
+  kind,
+  stages,
+  statuses,
+  onChanged,
+}: {
+  kind: StatusKind;
+  stages: StageInfo[];
+  statuses: Status[];
+  /** After any saved change, e.g. to reload the list. */
+  onChanged?: () => void;
+}) {
   const router = useRouter();
   const [order, setOrder] = React.useState(statuses);
   const [synced, setSynced] = React.useState(statuses);
@@ -84,6 +95,7 @@ export function StatusList({ kind, stages, statuses }: { kind: StatusKind; stage
       return void toast.error(result.error);
     }
     router.refresh();
+    onChanged?.();
   };
 
   const move = (from: number, to: number) => {
@@ -157,6 +169,7 @@ export function StatusList({ kind, stages, statuses }: { kind: StatusKind; stage
           status={dialog.status}
           stage={dialog.stage}
           lockedReason={lockedReason(dialog.status)}
+          onSaved={onChanged}
         />
       )}
 
@@ -165,6 +178,7 @@ export function StatusList({ kind, stages, statuses }: { kind: StatusKind; stage
         status={removing}
         targets={removing ? siblings(removing) : []}
         onClose={() => setRemoving(null)}
+        onRemoved={onChanged}
       />
     </div>
   );
@@ -264,11 +278,13 @@ function RemoveDialog({
   status,
   targets,
   onClose,
+  onRemoved,
 }: {
   kind: StatusKind;
   status: Status | null;
   targets: Status[];
   onClose: () => void;
+  onRemoved?: () => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
@@ -290,6 +306,7 @@ function RemoveDialog({
       });
       onClose();
       router.refresh();
+      onRemoved?.();
     });
 
   return (

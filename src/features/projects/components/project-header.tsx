@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ProjectPortalDialog, type PortalInfo } from "@/features/portal/components/portal-admin";
 import { StatusDot } from "@/features/statuses/components/status-chip";
+import { StatusManagerDialog } from "@/features/statuses/components/status-manager";
 import type { StatusBadge } from "@/features/statuses/constants";
 import { deleteProject, setProjectStatus } from "../actions";
 import type { ProjectStatusDef } from "../constants";
@@ -62,6 +63,7 @@ export function ProjectHeader({
   const [editOpen, setEditOpen] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [shareOpen, setShareOpen] = React.useState(false);
+  const [editingStatuses, setEditingStatuses] = React.useState(false);
   const current = statusInfo;
 
   const changeStatus = (status: ProjectStatusDef) =>
@@ -119,10 +121,8 @@ export function ProjectHeader({
                   </DropdownMenuItem>
                 ))}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/workspace/statuses#projects">
-                    <Settings2Icon /> Edit statuses
-                  </Link>
+                <DropdownMenuItem onSelect={() => setEditingStatuses(true)}>
+                  <Settings2Icon /> Edit statuses
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -164,6 +164,8 @@ export function ProjectHeader({
           siteUrl={siteUrl}
         />
       )}
+
+      {isAdmin && <StatusManagerDialog kind="project" open={editingStatuses} onOpenChange={setEditingStatuses} />}
 
       {isAdmin && editOpen && (
         <ProjectFormDialog open onOpenChange={setEditOpen} project={project} clients={clients} editors={editors} />

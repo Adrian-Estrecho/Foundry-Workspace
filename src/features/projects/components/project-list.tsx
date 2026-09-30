@@ -29,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { StatusDot } from "@/features/statuses/components/status-chip";
+import { StatusManagerButton, StatusManagerDialog } from "@/features/statuses/components/status-manager";
 import { Input } from "@/components/ui/input";
 import { dueLabel } from "@/lib/dates";
 import { cn } from "@/lib/utils";
@@ -111,9 +112,12 @@ export function ProjectList({
           </NativeSelect>
         )}
         {isAdmin && (
-          <Button onClick={() => setCreating(true)} className="sm:ml-auto">
-            <PlusIcon /> New project
-          </Button>
+          <div className="flex gap-2 sm:ml-auto">
+            <StatusManagerButton kind="project" />
+            <Button onClick={() => setCreating(true)}>
+              <PlusIcon /> New project
+            </Button>
+          </div>
         )}
       </div>
 
@@ -223,6 +227,7 @@ function ProjectCard({
 
 function StatusMenu({ project, statuses }: { project: ProjectSummary; statuses: ProjectStatusDef[] }) {
   const router = useRouter();
+  const [editing, setEditing] = React.useState(false);
   const move = async (status: ProjectStatusDef) => {
     const result = await setProjectStatus(project.id, status.id);
     if (!result.ok) return void toast.error(result.error);
@@ -257,12 +262,11 @@ function StatusMenu({ project, statuses }: { project: ProjectSummary; statuses: 
             </DropdownMenuItem>
           ))}
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="/workspace/statuses#projects">
-            <Settings2Icon /> Edit statuses
-          </Link>
+        <DropdownMenuItem onSelect={() => setEditing(true)}>
+          <Settings2Icon /> Edit statuses
         </DropdownMenuItem>
       </DropdownMenuContent>
+      <StatusManagerDialog kind="project" open={editing} onOpenChange={setEditing} />
     </DropdownMenu>
   );
 }

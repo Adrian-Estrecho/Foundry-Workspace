@@ -9,7 +9,7 @@ import { RECENT_DONE_DAYS, type TaskStatusDef } from "@/features/tasks/constants
 import type { TaskFormOptions, TaskSummary } from "@/features/tasks/queries";
 import { TaskBoard } from "@/features/tasks/components/task-board";
 import { TaskList } from "@/features/tasks/components/task-list";
-import { TaskWorkspace, useTaskWorkspace } from "@/features/tasks/components/task-workspace";
+import { TaskStatusesButton, TaskWorkspace, useTaskWorkspace } from "@/features/tasks/components/task-workspace";
 
 /**
  * The project's tasks as a board or a list. Editors see only their own. The
@@ -60,6 +60,7 @@ export function ProjectTasks({
               { value: "list", label: "List" },
             ]}
           />
+          <TaskStatusesButton />
           {isAdmin && <NewTask projectId={projectId} />}
         </div>
 
