@@ -115,12 +115,18 @@ export function CheckboxChips({
   );
 }
 
-/** Native <select> styled like <Input>: accessible and mobile-friendly. */
+/**
+ * Native <select> styled like <Input>: accessible and mobile-friendly. The
+ * browser draws the open list, so it's told the colour scheme, and every
+ * option and group heading (not only top-level options) gets the popover
+ * colours; otherwise grouped options keep the light text on a white list.
+ */
 export function NativeSelect({ className, children, ...props }: React.ComponentProps<"select">) {
   return (
     <select
       className={cn(
-        "h-10 w-full rounded-xl border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive dark:bg-input/30 [&>option]:bg-popover",
+        "h-10 w-full rounded-xl border border-input bg-transparent px-3 text-sm outline-none scheme-light focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive dark:bg-input/30 dark:scheme-dark",
+        "[&_optgroup]:bg-popover [&_optgroup]:text-muted-foreground [&_option]:bg-popover [&_option]:text-popover-foreground",
         className,
       )}
       {...props}
