@@ -49,15 +49,16 @@ export default async function TaskPage(props: PageProps<"/tasks/[id]">) {
     dueDate: task.due_date,
     priority: task.priority,
     status: task.status,
+    statusId: data.statusInfo.id,
   };
   const totalSeconds = data.time.reduce((sum, row) => sum + row.seconds, 0);
   const latestFeedback = [...data.comments].reverse().find((c) => c.author?.isAdmin);
 
   return (
-    <TaskWorkspace isAdmin={isAdmin} today={data.today} options={data.options}>
+    <TaskWorkspace isAdmin={isAdmin} today={data.today} options={data.options} statuses={data.statuses}>
       <RealtimeRefresh channel={`task-${id}`} tables="tasks,subtasks,task_comments,task_attachments" />
       <TaskHeader
-        task={{ ...draft, isTrial: task.is_trial }}
+        task={{ ...draft, isTrial: task.is_trial, statusInfo: data.statusInfo }}
         canWork={isAssignee}
         context={
           task.is_trial ? (
@@ -146,7 +147,7 @@ export default async function TaskPage(props: PageProps<"/tasks/[id]">) {
 
         <div className="grid grid-cols-1 content-start gap-5 xl:col-span-4">
           <DetailsPanel
-            task={draft}
+            task={{ ...draft, statusInfo: data.statusInfo }}
             assignee={assignee}
             assigneeActive={data.assigneeActive}
             project={project ? { id: project.id, name: project.name } : null}

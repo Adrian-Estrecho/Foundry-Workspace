@@ -1,5 +1,5 @@
 import { Constants } from "@/types/database";
-import { DUE_FILTERS, TASK_VIEWS, type DueFilter, type TaskPriority, type TaskStatus, type TaskView } from "./constants";
+import { DUE_FILTERS, TASK_VIEWS, type DueFilter, type TaskPriority, type TaskView } from "./constants";
 
 /**
  * Task filters live in the URL (/tasks?view=list&editor=…&due=overdue), so
@@ -11,7 +11,8 @@ export type TaskFilters = {
   editor: string | null;
   client: string | null;
   project: string | null;
-  status: TaskStatus | null;
+  /** One of the workspace's statuses (its id), or a whole stage, e.g. "for_review". */
+  status: string | null;
   priority: TaskPriority | null;
   due: DueFilter | null;
   q: string;
@@ -36,12 +37,13 @@ function oneOf<T extends string>(value: string | null, options: readonly T[]) {
 export function parseTaskFilters(params: Params): TaskFilters {
   const editor = pick(params, "editor");
   const month = pick(params, "month");
+  const status = pick(params, "status");
   return {
     view: oneOf(pick(params, "view"), TASK_VIEWS.map((v) => v.value)) ?? "board",
     editor: editor === "none" || isUuid(editor) ? editor : null,
     client: isUuid(pick(params, "client")) ? pick(params, "client") : null,
     project: isUuid(pick(params, "project")) ? pick(params, "project") : null,
-    status: oneOf(pick(params, "status"), Constants.public.Enums.task_status),
+    status: isUuid(status) ? status : oneOf(status, Constants.public.Enums.task_status),
     priority: oneOf(pick(params, "priority"), Constants.public.Enums.task_priority),
     due: oneOf(pick(params, "due"), DUE_FILTERS.map((d) => d.value)),
     q: (pick(params, "q") ?? "").trim().slice(0, 100),

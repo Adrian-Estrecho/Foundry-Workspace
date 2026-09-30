@@ -18,6 +18,7 @@ import { requireAdmin } from "@/lib/auth";
 import { formatDay, timeAgo, todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
+import { one } from "@/lib/utils";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -66,6 +67,7 @@ export default async function ClientPage(props: PageProps<"/clients/[id]">) {
               id: p.id,
               name: p.name,
               status: p.status,
+              statusInfo: one(p.status_info),
               deadline: p.deadline,
               editors: p.project_editors
                 .map(({ editor }) => editor && { id: editor.id, name: editor.profile?.full_name ?? "Editor", avatarUrl: editor.profile?.avatar_url ?? null })

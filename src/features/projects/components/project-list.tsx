@@ -4,7 +4,17 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { AlertTriangleIcon, ArrowRightIcon, CalendarIcon, EyeIcon, FolderKanbanIcon, MoreHorizontalIcon, PlusIcon, SearchIcon } from "lucide-react";
+import {
+  AlertTriangleIcon,
+  ArrowRightIcon,
+  CalendarIcon,
+  EyeIcon,
+  FolderKanbanIcon,
+  MoreHorizontalIcon,
+  PlusIcon,
+  SearchIcon,
+  Settings2Icon,
+} from "lucide-react";
 import { NativeSelect } from "@/components/shared/form";
 import { EmptyState } from "@/components/shared/panel";
 import { Segmented } from "@/components/shared/segmented";
@@ -15,13 +25,15 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { StatusDot } from "@/features/statuses/components/status-chip";
 import { Input } from "@/components/ui/input";
 import { dueLabel } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { setProjectStatus } from "../actions";
-import { PROJECT_STATUSES, type ProjectStatus } from "../constants";
+import type { ProjectStatusDef } from "../constants";
 import type { ProjectSummary } from "../queries";
 import { ProjectFormDialog, type ClientChoice, type EditorOption } from "./project-form-dialog";
 import { ProjectStatusChip } from "./project-status";
@@ -31,12 +43,14 @@ type Scope = "active" | "delivered" | "all";
 /** Project cards with task progress. Admins can add projects and change status from each card. */
 export function ProjectList({
   projects,
+  statuses,
   today,
   isAdmin,
   clients,
   editors,
 }: {
   projects: ProjectSummary[];
+  statuses: ProjectStatusDef[];
   today: string;
   isAdmin: boolean;
   clients: ClientChoice[];
@@ -121,7 +135,7 @@ export function ProjectList({
       ) : (
         <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
           {visible.map((project) => (
-            <ProjectCard key={project.id} project={project} today={today} isAdmin={isAdmin} />
+            <ProjectCard key={project.id} project={project} statuses={statuses} today={today} isAdmin={isAdmin} />
           ))}
         </ul>
       )}
@@ -133,7 +147,17 @@ export function ProjectList({
   );
 }
 
-function ProjectCard({ project, today, isAdmin }: { project: ProjectSummary; today: string; isAdmin: boolean }) {
+function ProjectCard({
+  project,
+  statuses,
+  today,
+  isAdmin,
+}: {
+  project: ProjectSummary;
+  statuses: ProjectStatusDef[];
+  today: string;
+  isAdmin: boolean;
+}) {
   const delivered = project.status === "delivered";
   const late = !delivered && project.deadline !== null && project.deadline < today;
   const pct = project.tasks.total ? Math.round((project.tasks.done / project.tasks.total) * 100) : 0;
@@ -144,7 +168,7 @@ function ProjectCard({ project, today, isAdmin }: { project: ProjectSummary; tod
         <p className="truncate text-xs text-muted-foreground">{project.client.name}</p>
         <p className="mt-0.5 truncate font-heading text-base font-medium">{project.name}</p>
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <ProjectStatusChip status={project.status} />
+          <ProjectStatusChip status={project.statusInfo} />
           {project.deadline && (
             <span className={cn("inline-flex items-center gap-1 text-xs tabular", late ? "font-medium text-danger" : "text-muted-foreground")}>
               <CalendarIcon className="size-3" />
@@ -190,19 +214,19 @@ function ProjectCard({ project, today, isAdmin }: { project: ProjectSummary; tod
       </Link>
       {isAdmin && (
         <div className="absolute top-3 right-3">
-          <StatusMenu project={project} />
+          <StatusMenu project={project} statuses={statuses} />
         </div>
       )}
     </li>
   );
 }
 
-function StatusMenu({ project }: { project: ProjectSummary }) {
+function StatusMenu({ project, statuses }: { project: ProjectSummary; statuses: ProjectStatusDef[] }) {
   const router = useRouter();
-  const move = async (status: ProjectStatus) => {
-    const result = await setProjectStatus(project.id, status);
+  const move = async (status: ProjectStatusDef) => {
+    const result = await setProjectStatus(project.id, status.id);
     if (!result.ok) return void toast.error(result.error);
-    toast.success(`${project.name} moved to ${PROJECT_STATUSES.find((s) => s.value === status)?.label}`);
+    toast.success(`${project.name} moved to ${status.name}`);
     router.refresh();
   };
 
@@ -218,18 +242,26 @@ function StatusMenu({ project }: { project: ProjectSummary }) {
           <MoreHorizontalIcon />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-52 rounded-2xl">
+      <DropdownMenuContent align="end" className="max-h-96 w-52 overflow-y-auto rounded-2xl">
         <DropdownMenuItem asChild>
           <Link href={`/projects/${project.id}`}>
             <ArrowRightIcon /> Open project
           </Link>
         </DropdownMenuItem>
         <DropdownMenuLabel>Move to</DropdownMenuLabel>
-        {PROJECT_STATUSES.filter((s) => s.value !== project.status).map((status) => (
-          <DropdownMenuItem key={status.value} onSelect={() => void move(status.value)}>
-            <span className={cn("size-2 rounded-full", status.dot)} /> {status.label}
-          </DropdownMenuItem>
-        ))}
+        {statuses
+          .filter((s) => s.id !== project.statusInfo.id)
+          .map((status) => (
+            <DropdownMenuItem key={status.id} onSelect={() => void move(status)}>
+              <StatusDot color={status.color} /> <span className="truncate">{status.name}</span>
+            </DropdownMenuItem>
+          ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href="/workspace/statuses#projects">
+            <Settings2Icon /> Edit statuses
+          </Link>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -1441,6 +1441,44 @@ export type Database = {
           },
         ];
       };
+      project_statuses: {
+        Row: {
+          color: string;
+          created_at: string;
+          id: string;
+          name: string;
+          position: number;
+          stage: Database["public"]["Enums"]["project_status"];
+          workspace_id: string;
+        };
+        Insert: {
+          color?: string;
+          created_at?: string;
+          id?: string;
+          name: string;
+          position?: number;
+          stage: Database["public"]["Enums"]["project_status"];
+          workspace_id?: string;
+        };
+        Update: {
+          color?: string;
+          created_at?: string;
+          id?: string;
+          name?: string;
+          position?: number;
+          stage?: Database["public"]["Enums"]["project_status"];
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "project_statuses_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       projects: {
         Row: {
           client_id: string;
@@ -1457,6 +1495,7 @@ export type Database = {
           spec_length: string | null;
           spec_notes: string | null;
           status: Database["public"]["Enums"]["project_status"];
+          status_id: string | null;
           updated_at: string;
           workspace_id: string;
         };
@@ -1475,6 +1514,7 @@ export type Database = {
           spec_length?: string | null;
           spec_notes?: string | null;
           status?: Database["public"]["Enums"]["project_status"];
+          status_id?: string | null;
           updated_at?: string;
           workspace_id?: string;
         };
@@ -1493,6 +1533,7 @@ export type Database = {
           spec_length?: string | null;
           spec_notes?: string | null;
           status?: Database["public"]["Enums"]["project_status"];
+          status_id?: string | null;
           updated_at?: string;
           workspace_id?: string;
         };
@@ -1517,6 +1558,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "profiles";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "projects_status_id_fkey";
+            columns: ["workspace_id", "status_id"];
+            isOneToOne: false;
+            referencedRelation: "project_statuses";
+            referencedColumns: ["workspace_id", "id"];
           },
           {
             foreignKeyName: "projects_workspace_id_fkey";
@@ -1960,6 +2008,44 @@ export type Database = {
           },
         ];
       };
+      task_statuses: {
+        Row: {
+          color: string;
+          created_at: string;
+          id: string;
+          name: string;
+          position: number;
+          stage: Database["public"]["Enums"]["task_status"];
+          workspace_id: string;
+        };
+        Insert: {
+          color?: string;
+          created_at?: string;
+          id?: string;
+          name: string;
+          position?: number;
+          stage: Database["public"]["Enums"]["task_status"];
+          workspace_id?: string;
+        };
+        Update: {
+          color?: string;
+          created_at?: string;
+          id?: string;
+          name?: string;
+          position?: number;
+          stage?: Database["public"]["Enums"]["task_status"];
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "task_statuses_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       tasks: {
         Row: {
           assigned_at: string | null;
@@ -1980,6 +2066,7 @@ export type Database = {
           start_reminded_at: string | null;
           start_reminders: number;
           status: Database["public"]["Enums"]["task_status"];
+          status_id: string | null;
           title: string;
           updated_at: string;
           workspace_id: string;
@@ -2003,6 +2090,7 @@ export type Database = {
           start_reminded_at?: string | null;
           start_reminders?: number;
           status?: Database["public"]["Enums"]["task_status"];
+          status_id?: string | null;
           title: string;
           updated_at?: string;
           workspace_id?: string;
@@ -2026,6 +2114,7 @@ export type Database = {
           start_reminded_at?: string | null;
           start_reminders?: number;
           status?: Database["public"]["Enums"]["task_status"];
+          status_id?: string | null;
           title?: string;
           updated_at?: string;
           workspace_id?: string;
@@ -2058,6 +2147,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "projects";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "tasks_status_id_fkey";
+            columns: ["workspace_id", "status_id"];
+            isOneToOne: false;
+            referencedRelation: "task_statuses";
+            referencedColumns: ["workspace_id", "id"];
           },
           {
             foreignKeyName: "tasks_workspace_id_fkey";
@@ -2495,6 +2591,11 @@ export type Database = {
       };
       create_workspace: { Args: { p_name: string; p_slug: string }; Returns: string };
       current_workspace_id: { Args: Record<PropertyKey, never>; Returns: string };
+      delete_project_status: {
+        Args: { p_move_to?: string; p_status_id: string };
+        Returns: undefined;
+      };
+      delete_task_status: { Args: { p_move_to?: string; p_status_id: string }; Returns: undefined };
       editor_hours: {
         Args: { p_from: string; p_to: string; p_tz?: string };
         Returns: {

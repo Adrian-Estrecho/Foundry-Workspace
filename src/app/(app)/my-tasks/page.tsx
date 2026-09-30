@@ -13,12 +13,12 @@ export default async function MyTasksPage(props: PageProps<"/my-tasks">) {
   if (user.role === "admin") redirect("/tasks");
 
   const { view } = await props.searchParams;
-  const { tasks, today } = await getMyTasks(user);
+  const { tasks, statuses, today } = await getMyTasks(user);
 
   return (
     <>
       <RealtimeRefresh channel="my-tasks" tables="tasks,subtasks,task_comments" />
-      <MyTasks tasks={tasks} today={today} view={view === "board" ? "board" : "list"} />
+      <MyTasks tasks={tasks} statuses={statuses} today={today} view={view === "board" ? "board" : "list"} />
     </>
   );
 }

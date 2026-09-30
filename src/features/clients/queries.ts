@@ -87,6 +87,7 @@ export async function getClientDetail(id: string) {
          lead:leads(*),
          checklist:client_checklist_items(*, done_by_profile:profiles(full_name)),
          projects(id, name, status, deadline, created_at,
+           status_info:project_statuses!projects_status_id_fkey(name, color),
            project_editors(editor:editors(id, profile:profiles!editors_id_fkey(full_name, avatar_url))))`,
       )
       .eq("id", id)

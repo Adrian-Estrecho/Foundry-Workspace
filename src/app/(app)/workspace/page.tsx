@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/shared/panel";
 import { Button } from "@/components/ui/button";
 import { FORM_KINDS, builtinOf, type FormField, type FormKind } from "@/features/forms/fields";
 import { getWorkspaceForms } from "@/features/forms/queries";
+import { getProjectStatuses, getTaskStatuses } from "@/features/statuses/queries";
 import { workspaceLogoUrl } from "@/features/workspaces/constants";
 import { requireAdmin } from "@/lib/auth";
 import { env } from "@/lib/env";
@@ -20,12 +21,14 @@ const summarize = (kind: FormKind, fields: FormField[], updatedAt: string | null
 /** Owner and admin settings that apply to everyone in the workspace. */
 export default async function WorkspacePage() {
   const user = await requireAdmin();
-  const [{ data: template }, forms] = await Promise.all([
+  const [{ data: template }, forms, taskStatuses, projectStatuses] = await Promise.all([
     (await createClient())
       .from("workspace_settings")
       .select("test_title, test_brief, test_asset_url, test_due_days")
       .maybeSingle(),
     getWorkspaceForms(),
+    getTaskStatuses(),
+    getProjectStatuses(),
   ]);
   const formSummaries = Object.fromEntries(
     FORM_KINDS.map((kind) => [kind, summarize(kind, forms[kind].fields, forms[kind].updatedAt)]),
@@ -50,6 +53,7 @@ export default async function WorkspacePage() {
         logoUrl={workspaceLogoUrl(user.workspace.logo_path)}
         siteUrl={env.siteUrl}
         formSummaries={formSummaries}
+        statuses={{ tasks: taskStatuses, projects: projectStatuses }}
       />
     </div>
   );

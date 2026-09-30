@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { formatDay, relativeDue } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { setTaskProgress } from "../../actions";
+import type { StatusBadge } from "@/features/statuses/constants";
 import type { Person } from "../../queries";
 import type { TaskDraft } from "../task-form-dialog";
 import { PriorityFlag, TaskStatusChip, dueTone } from "../task-bits";
@@ -27,7 +28,7 @@ export function DetailsPanel({
   creatorName,
   completedAt,
 }: {
-  task: Required<Omit<TaskDraft, "id">> & { id: string };
+  task: Required<Omit<TaskDraft, "id">> & { id: string; statusInfo: StatusBadge };
   assignee: Person | null;
   assigneeActive: boolean;
   project: { id: string; name: string } | null;
@@ -71,7 +72,7 @@ export function DetailsPanel({
           )}
         </Row>
         <Row label="Status">
-          <TaskStatusChip status={task.status} />
+          <TaskStatusChip status={task.statusInfo} />
         </Row>
         <Row label="Due">
           {task.dueDate ? (

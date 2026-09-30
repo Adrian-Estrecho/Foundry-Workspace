@@ -101,6 +101,7 @@ export function KanbanBoard<T extends KanbanItem>({
   emptyText = "Drop here",
   ariaLabel,
   scrollbarAtWindowBottom = false,
+  trailing,
 }: {
   columns: KanbanColumn[];
   items: T[];
@@ -113,13 +114,18 @@ export function KanbanBoard<T extends KanbanItem>({
   ariaLabel: string;
   /** Keep the scrollbar on the bottom edge of the window. Only for boards that end the page. */
   scrollbarAtWindowBottom?: boolean;
+  /** After the last column, e.g. "Add status". */
+  trailing?: React.ReactNode;
 }) {
   const [board, setBoard] = React.useState(() => toBoard(columns, items));
   const [activeId, setActiveId] = React.useState<string | null>(null);
   const [syncedItems, setSyncedItems] = React.useState(items);
-  // New server data (refresh, realtime) replaces local state, but never mid-drag.
-  if (items !== syncedItems && activeId === null) {
+  const columnKey = columns.map((c) => c.id).join();
+  const [syncedColumns, setSyncedColumns] = React.useState(columnKey);
+  // New server data (refresh, realtime) or columns replace local state, but never mid-drag.
+  if ((items !== syncedItems || columnKey !== syncedColumns) && activeId === null) {
     setSyncedItems(items);
+    setSyncedColumns(columnKey);
     setBoard(toBoard(columns, items));
   }
 
@@ -311,6 +317,7 @@ export function KanbanBoard<T extends KanbanItem>({
               ))}
             </Column>
           ))}
+          {trailing}
         </div>
         <PinnedScrollbar board={boardRef} columnCount={columns.length} atWindowBottom={scrollbarAtWindowBottom} />
       </div>

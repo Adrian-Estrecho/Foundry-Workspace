@@ -1,17 +1,14 @@
 import { CalendarIcon, FlagIcon } from "lucide-react";
 import { daysBetween, formatDay } from "@/lib/dates";
+import { StatusChip } from "@/features/statuses/components/status-chip";
+import type { StatusBadge } from "@/features/statuses/constants";
 import { PRIORITY_META } from "@/lib/status";
 import { cn } from "@/lib/utils";
-import { taskStatusMeta, type TaskPriority, type TaskStatus } from "../constants";
+import type { TaskPriority } from "../constants";
 
-export function TaskStatusChip({ status, className }: { status: TaskStatus; className?: string }) {
-  const meta = taskStatusMeta(status);
-  return (
-    <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ring-1", meta.chip, className)}>
-      <span className={cn("size-1.5 rounded-full", meta.dot)} />
-      {meta.label}
-    </span>
-  );
+/** The task's status (the workspace's own name and colour). */
+export function TaskStatusChip({ status, className }: { status: Pick<StatusBadge, "name" | "color">; className?: string }) {
+  return <StatusChip status={status} className={className} />;
 }
 
 export function PriorityFlag({ priority, className }: { priority: TaskPriority; className?: string }) {

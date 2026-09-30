@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRightIcon, ExternalLinkIcon, MoreHorizontalIcon, Trash2Icon, UserRoundIcon } from "lucide-react";
+import { ArrowRightIcon, ExternalLinkIcon, MoreHorizontalIcon, PlusIcon, Trash2Icon, UserRoundIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -13,8 +13,8 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { StatusDot } from "@/features/statuses/components/status-chip";
 import { cn } from "@/lib/utils";
-import { TASK_STATUSES } from "../constants";
 import type { TaskSummary } from "../queries";
 import { useTaskWorkspace } from "./task-workspace";
 
@@ -25,7 +25,7 @@ export const taskHref = (task: Pick<TaskSummary, "id" | "isTrial">, isAdmin: boo
 /** Card and row actions. "Move to" also works on phones, where dragging is fiddly. */
 export function TaskMenu({ task, className }: { task: TaskSummary; className?: string }) {
   const workspace = useTaskWorkspace();
-  const targets = TASK_STATUSES.filter((s) => s.value !== task.status && workspace.allowedStatuses.includes(s.value));
+  const targets = workspace.statuses.filter((s) => s.id !== task.statusInfo.id && workspace.canMoveTo(s));
   const editors = workspace.options?.editors.filter((e) => e.isActive && e.id !== task.assignee?.id) ?? [];
   const canMove = targets.length > 0 && (workspace.isAdmin || task.status !== "done");
 
@@ -52,12 +52,20 @@ export function TaskMenu({ task, className }: { task: TaskSummary; className?: s
             <DropdownMenuSubTrigger>
               <ArrowRightIcon /> Move to
             </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="rounded-2xl">
+            <DropdownMenuSubContent className="max-h-80 overflow-y-auto rounded-2xl">
               {targets.map((status) => (
-                <DropdownMenuItem key={status.value} onSelect={() => void workspace.changeStatus(task, status.value)}>
-                  <span className={cn("size-2 rounded-full", status.dot)} /> {status.label}
+                <DropdownMenuItem key={status.id} onSelect={() => void workspace.changeStatus(task, status)}>
+                  <StatusDot color={status.color} /> {status.name}
                 </DropdownMenuItem>
               ))}
+              {workspace.isAdmin && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => workspace.addStatus()}>
+                    <PlusIcon /> New status
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuSubContent>
           </DropdownMenuSub>
         )}

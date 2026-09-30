@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "Projects" };
 export default async function ProjectsPage() {
   const user = await requireUser();
   const isAdmin = user.role === "admin";
-  const [{ projects, today }, clients, editors] = await Promise.all([
+  const [{ projects, statuses, today }, clients, editors] = await Promise.all([
     getProjects(user),
     isAdmin ? getClientChoices() : Promise.resolve([]),
     isAdmin ? getEditorOptions() : Promise.resolve([]),
@@ -30,7 +30,7 @@ export default async function ProjectsPage() {
             : "The client projects you're working on."
         }
       />
-      <ProjectList projects={projects} today={today} isAdmin={isAdmin} clients={clients} editors={editors} />
+      <ProjectList projects={projects} statuses={statuses} today={today} isAdmin={isAdmin} clients={clients} editors={editors} />
     </>
   );
 }

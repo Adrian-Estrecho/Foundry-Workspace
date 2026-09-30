@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeftIcon, CheckIcon, ChevronDownIcon, GlobeIcon, MoreHorizontalIcon, PencilIcon, Trash2Icon } from "lucide-react";
+import { ArrowLeftIcon, CheckIcon, ChevronDownIcon, GlobeIcon, MoreHorizontalIcon, PencilIcon, Settings2Icon, Trash2Icon } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,14 +25,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ProjectPortalDialog, type PortalInfo } from "@/features/portal/components/portal-admin";
-import { cn } from "@/lib/utils";
+import { StatusDot } from "@/features/statuses/components/status-chip";
+import type { StatusBadge } from "@/features/statuses/constants";
 import { deleteProject, setProjectStatus } from "../actions";
-import { PROJECT_STATUSES, projectStatusMeta, type ProjectStatus } from "../constants";
+import type { ProjectStatusDef } from "../constants";
 import { ProjectFormDialog, type ClientChoice, type EditorOption, type ProjectEditable } from "./project-form-dialog";
 import { ProjectStatusChip } from "./project-status";
 
 export function ProjectHeader({
   project,
+  statusInfo,
+  statuses,
   client,
   isAdmin,
   taskCount,
@@ -42,6 +45,9 @@ export function ProjectHeader({
   siteUrl = "",
 }: {
   project: ProjectEditable;
+  /** The status the project is in, and the workspace's statuses to move it to. */
+  statusInfo: StatusBadge;
+  statuses: ProjectStatusDef[];
   client: { id: string; name: string };
   isAdmin: boolean;
   taskCount: number;
@@ -56,13 +62,13 @@ export function ProjectHeader({
   const [editOpen, setEditOpen] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [shareOpen, setShareOpen] = React.useState(false);
-  const current = projectStatusMeta(project.status);
+  const current = statusInfo;
 
-  const changeStatus = (status: ProjectStatus) =>
+  const changeStatus = (status: ProjectStatusDef) =>
     startTransition(async () => {
-      const result = await setProjectStatus(project.id, status);
+      const result = await setProjectStatus(project.id, status.id);
       if (!result.ok) return void toast.error(result.error);
-      toast.success(`Moved to ${projectStatusMeta(status).label}`);
+      toast.success(`Moved to ${status.name}`);
       router.refresh();
     });
 
@@ -98,20 +104,26 @@ export function ProjectHeader({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="secondary" size="lg" className="bg-surface ring-1 ring-border" disabled={pending}>
-                  <span className={cn("size-2.5 rounded-full", current.dot)} />
-                  {current.label}
+                  <StatusDot color={current.color} className="size-2.5" />
+                  {current.name}
                   <ChevronDownIcon className="text-muted-foreground" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56 rounded-2xl">
+              <DropdownMenuContent align="end" className="max-h-96 w-56 overflow-y-auto rounded-2xl">
                 <DropdownMenuLabel>Project status</DropdownMenuLabel>
-                {PROJECT_STATUSES.map((status) => (
-                  <DropdownMenuItem key={status.value} onSelect={() => status.value !== project.status && changeStatus(status.value)}>
-                    <span className={cn("size-2 rounded-full", status.dot)} />
-                    {status.label}
-                    {status.value === project.status && <CheckIcon className="ml-auto" />}
+                {statuses.map((status) => (
+                  <DropdownMenuItem key={status.id} onSelect={() => status.id !== current.id && changeStatus(status)}>
+                    <StatusDot color={status.color} />
+                    <span className="truncate">{status.name}</span>
+                    {status.id === current.id && <CheckIcon className="ml-auto" />}
                   </DropdownMenuItem>
                 ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/workspace/statuses#projects">
+                    <Settings2Icon /> Edit statuses
+                  </Link>
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
             <Button variant="secondary" size="lg" className="bg-surface ring-1 ring-border" onClick={() => setEditOpen(true)}>
@@ -138,7 +150,7 @@ export function ProjectHeader({
             </DropdownMenu>
           </div>
         ) : (
-          <ProjectStatusChip status={project.status} className="px-3 py-1 text-sm" />
+          <ProjectStatusChip status={statusInfo} className="px-3 py-1 text-sm" />
         )}
       </div>
 

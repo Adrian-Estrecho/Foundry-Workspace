@@ -100,6 +100,7 @@ export async function getEditorProfile(id: string, user: CurrentUser) {
       .select(
         `id, title, status, priority, due_date, completed_at, revision_count, is_trial, description, created_at,
          project:projects(name),
+         status_info:task_statuses!tasks_status_id_fkey(name, color),
          attachments:task_attachments(id, kind, url, label, created_at),
          comments:task_comments(id, body, created_at, author:profiles(full_name, avatar_url))`,
       )

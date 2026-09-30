@@ -17,27 +17,36 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { deleteTask, moveTask, reassignTask, reviewTask, setTaskStatus } from "../actions";
-import { EDITOR_STATUSES, taskStatusMeta, type TaskStatus } from "../constants";
+import { StatusDialog } from "@/features/statuses/components/status-dialog";
+import { deleteTask, moveTask, reassignTask } from "../actions";
+import { EDITOR_STAGES, TASK_STAGES, type TaskStatus, type TaskStatusDef } from "../constants";
 import type { TaskFormOptions } from "../queries";
 import { TaskFormDialog, type TaskDraft } from "./task-form-dialog";
 
-type TaskRef = { id: string; title: string; status: TaskStatus };
+/** A task as status changes need it: its stage and its status. */
+type TaskRef = { id: string; title: string; status: TaskStatus; statusInfo: { id: string } };
 
 type Workspace = {
   isAdmin: boolean;
   today: string;
   options: TaskFormOptions | null;
-  /** Statuses this person may move a task to. */
-  allowedStatuses: TaskStatus[];
+  /** The workspace's task statuses, in board order. */
+  statuses: TaskStatusDef[];
+  /** Whether this person may move a task to the status. */
+  canMoveTo: (status: TaskStatusDef) => boolean;
   newTask: (draft?: TaskDraft) => void;
   editTask: (task: TaskDraft & { id: string }) => void;
-  confirmDelete: (task: TaskRef, then?: () => void) => void;
-  /** Status change from a menu or button (asks for feedback before Revisions). */
-  changeStatus: (task: TaskRef, status: TaskStatus) => Promise<boolean>;
+  confirmDelete: (task: Pick<TaskRef, "id" | "title">, then?: () => void) => void;
+  /**
+   * Status change from a menu or button (asks for feedback before Revisions).
+   * A stage means that stage's first status.
+   */
+  changeStatus: (task: TaskRef, to: TaskStatusDef | TaskStatus) => Promise<boolean>;
   /** Board drop: persists the move, asking for feedback first when dropped on Revisions. */
-  dropOnStatus: (task: TaskRef, status: TaskStatus, position: number) => Promise<boolean>;
-  assign: (task: TaskRef, editorId: string | null, editorName: string) => Promise<boolean>;
+  dropOnStatus: (task: TaskRef, to: TaskStatusDef, position: number) => Promise<boolean>;
+  assign: (task: Pick<TaskRef, "id" | "title">, editorId: string | null, editorName: string) => Promise<boolean>;
+  /** Admins: opens the new-status dialog. */
+  addStatus: (stage?: TaskStatus) => void;
 };
 
 const WorkspaceContext = React.createContext<Workspace | null>(null);
@@ -48,81 +57,90 @@ export function useTaskWorkspace() {
   return workspace;
 }
 
-type Feedback = { task: TaskRef; position: number | null; resolve: (ok: boolean) => void };
+type Feedback = { task: TaskRef; target: TaskStatusDef; position: number | null; resolve: (ok: boolean) => void };
 
 /**
  * Shared task behaviour for every view: the new/edit dialog, delete
  * confirmation, and status changes with the rules applied up front (editors
- * stop at For Review; Revisions asks the admin what to change).
+ * stop at the For Review stage; entering Revisions asks the admin what to
+ * change). Admins can add a status from here too.
  */
 export function TaskWorkspace({
   isAdmin,
   today,
   options,
+  statuses,
   children,
 }: {
   isAdmin: boolean;
   today: string;
   options: TaskFormOptions | null;
+  statuses: TaskStatusDef[];
   children: React.ReactNode;
 }) {
   const router = useRouter();
   const [form, setForm] = React.useState<{ key: number; draft: TaskDraft } | null>(null);
-  const [toDelete, setToDelete] = React.useState<{ task: TaskRef; then?: () => void } | null>(null);
+  const [toDelete, setToDelete] = React.useState<{ task: Pick<TaskRef, "id" | "title">; then?: () => void } | null>(null);
   const [deleting, startDelete] = React.useTransition();
   const [feedback, setFeedback] = React.useState<Feedback | null>(null);
-  const allowedStatuses = isAdmin ? (["todo", "in_progress", "for_review", "revisions", "done"] as TaskStatus[]) : EDITOR_STATUSES;
+  const [newStatus, setNewStatus] = React.useState<{ key: number; stage: TaskStatus } | null>(null);
 
-  const guard = (task: TaskRef, status: TaskStatus) => {
+  const canMoveTo = (status: TaskStatusDef) => isAdmin || EDITOR_STAGES.includes(status.stage);
+
+  const guard = (task: TaskRef, target: TaskStatusDef) => {
     if (isAdmin) return true;
     if (task.status === "done") {
       toast.error("This task is done. Ask an admin to reopen it.");
       return false;
     }
-    if (!EDITOR_STATUSES.includes(status)) {
-      toast.error(`Only an admin can move a task to ${taskStatusMeta(status).label}.`);
+    if (!canMoveTo(target)) {
+      toast.error(`Only an admin can move a task to ${target.name}.`);
       return false;
     }
     return true;
   };
 
-  const announce = (task: TaskRef, status: TaskStatus) =>
-    toast.success(`${task.title} moved to ${taskStatusMeta(status).label}`, {
-      description: status === "for_review" && !isAdmin ? "Your admins have been notified." : undefined,
+  const announce = (task: TaskRef, target: TaskStatusDef) =>
+    toast.success(`${task.title} moved to ${target.name}`, {
+      description:
+        target.stage === "for_review" && task.status !== "for_review" && !isAdmin ? "Your admins have been notified." : undefined,
     });
 
-  const askFeedback = (task: TaskRef, position: number | null) =>
-    new Promise<boolean>((resolve) => setFeedback({ task, position, resolve }));
+  const askFeedback = (task: TaskRef, target: TaskStatusDef, position: number | null) =>
+    new Promise<boolean>((resolve) => setFeedback({ task, target, position, resolve }));
 
   const workspace: Workspace = {
     isAdmin,
     today,
     options,
-    allowedStatuses,
+    statuses,
+    canMoveTo,
     newTask: (draft = {}) => setForm((f) => ({ key: (f?.key ?? 0) + 1, draft })),
     editTask: (task) => setForm((f) => ({ key: (f?.key ?? 0) + 1, draft: task })),
     confirmDelete: (task, then) => setToDelete({ task, then }),
-    changeStatus: async (task, status) => {
-      if (status === task.status || !guard(task, status)) return false;
-      if (status === "revisions") return askFeedback(task, null);
-      const result = await setTaskStatus(task.id, status);
+    changeStatus: async (task, to) => {
+      const target = typeof to === "string" ? statuses.find((s) => s.stage === to) : to;
+      if (!target || target.id === task.statusInfo.id || !guard(task, target)) return false;
+      if (target.stage === "revisions" && task.status !== "revisions") return askFeedback(task, target, null);
+      const result = await moveTask(task.id, target.id, null);
       if (!result.ok) {
         toast.error(result.error);
         return false;
       }
-      announce(task, status);
+      announce(task, target);
       router.refresh();
       return true;
     },
-    dropOnStatus: async (task, status, position) => {
-      if (status !== task.status && !guard(task, status)) return false;
-      if (status === "revisions" && task.status !== "revisions") return askFeedback(task, position);
-      const result = await moveTask(task.id, status, position);
+    dropOnStatus: async (task, target, position) => {
+      const moving = target.id !== task.statusInfo.id;
+      if (moving && !guard(task, target)) return false;
+      if (target.stage === "revisions" && task.status !== "revisions") return askFeedback(task, target, position);
+      const result = await moveTask(task.id, target.id, position);
       if (!result.ok) {
         toast.error(result.error);
         return false;
       }
-      if (status !== task.status) announce(task, status);
+      if (moving) announce(task, target);
       return true;
     },
     assign: async (task, editorId, editorName) => {
@@ -137,6 +155,7 @@ export function TaskWorkspace({
       router.refresh();
       return true;
     },
+    addStatus: (stage = "in_progress") => setNewStatus((s) => ({ key: (s?.key ?? 0) + 1, stage })),
   };
 
   const remove = () =>
@@ -162,6 +181,18 @@ export function TaskWorkspace({
           onOpenChange={(open) => !open && setForm(null)}
           task={form.draft}
           options={options}
+          statuses={statuses}
+        />
+      )}
+
+      {isAdmin && newStatus && (
+        <StatusDialog
+          key={newStatus.key}
+          open
+          onOpenChange={(open) => !open && setNewStatus(null)}
+          kind="task"
+          stages={TASK_STAGES}
+          stage={newStatus.stage}
         />
       )}
 
@@ -215,9 +246,8 @@ function RevisionsDialog({ request, onDone }: { request: Feedback | null; onDone
   const send = () =>
     startTransition(async () => {
       if (!request) return;
-      const { task, position } = request;
-      const result =
-        position === null ? await reviewTask(task.id, "revisions", text) : await moveTask(task.id, "revisions", position, text);
+      const { task, target, position } = request;
+      const result = await moveTask(task.id, target.id, position, text);
       if (!result.ok) return void toast.error(result.error);
       toast.success("Revisions requested", { description: "The editor has been notified with your feedback." });
       onDone(true);

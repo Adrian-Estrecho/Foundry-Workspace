@@ -6,7 +6,7 @@ import { ArrowDownIcon, ArrowUpIcon, CheckSquareIcon, GraduationCapIcon, ListTod
 import { EmptyState } from "@/components/shared/panel";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { cn } from "@/lib/utils";
-import { TASK_STATUSES, priorityRank } from "../constants";
+import { priorityRank } from "../constants";
 import type { TaskSummary } from "../queries";
 import { DueChip, PriorityFlag, TaskStatusChip } from "./task-bits";
 import { taskContext } from "./task-card";
@@ -15,16 +15,15 @@ import { useTaskWorkspace } from "./task-workspace";
 
 type SortKey = "title" | "assignee" | "status" | "priority" | "due";
 
-const statusIndex = (status: TaskSummary["status"]) => TASK_STATUSES.findIndex((s) => s.value === status);
-
-function compare(a: TaskSummary, b: TaskSummary, key: SortKey) {
+/** Sorts by `key`; statuses sort in the workspace's order (`statusOrder`: status id to index). */
+function compare(a: TaskSummary, b: TaskSummary, key: SortKey, statusOrder: Map<string, number>) {
   switch (key) {
     case "title":
       return a.title.localeCompare(b.title);
     case "assignee":
       return (a.assignee?.name ?? "~").localeCompare(b.assignee?.name ?? "~");
     case "status":
-      return statusIndex(a.status) - statusIndex(b.status);
+      return (statusOrder.get(a.statusInfo.id) ?? 0) - (statusOrder.get(b.statusInfo.id) ?? 0);
     case "priority":
       return priorityRank(b.priority) - priorityRank(a.priority);
     case "due":
@@ -42,10 +41,11 @@ export function TaskList({ tasks, showAssignee = true }: { tasks: TaskSummary[];
   const [sort, setSort] = React.useState<{ key: SortKey; dir: 1 | -1 }>({ key: "due", dir: 1 });
 
   const sorted = React.useMemo(() => {
-    const list = [...tasks].sort((a, b) => compare(a, b, sort.key) * sort.dir);
+    const statusOrder = new Map(workspace.statuses.map((status, index) => [status.id, index]));
+    const list = [...tasks].sort((a, b) => compare(a, b, sort.key, statusOrder) * sort.dir);
     // Tasks without a date stay at the bottom when sorting by due date.
     return sort.key === "due" && sort.dir === -1 ? [...list.filter((t) => t.dueDate), ...list.filter((t) => !t.dueDate)] : list;
-  }, [tasks, sort]);
+  }, [tasks, sort, workspace.statuses]);
 
   if (tasks.length === 0) {
     return (
@@ -112,7 +112,7 @@ export function TaskList({ tasks, showAssignee = true }: { tasks: TaskSummary[];
                     </span>
                     {/* Folded details for small screens. */}
                     <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 md:hidden">
-                      <TaskStatusChip status={task.status} />
+                      <TaskStatusChip status={task.statusInfo} />
                       <PriorityFlag priority={task.priority} />
                       <DueChip dueDate={task.dueDate} today={workspace.today} done={done} className="sm:hidden" />
                       {showAssignee && task.assignee && <span className="text-xs text-muted-foreground">{task.assignee.name}</span>}
@@ -132,7 +132,7 @@ export function TaskList({ tasks, showAssignee = true }: { tasks: TaskSummary[];
                   </td>
                 )}
                 <td className="hidden px-3 py-2.5 md:table-cell">
-                  <TaskStatusChip status={task.status} />
+                  <TaskStatusChip status={task.statusInfo} />
                 </td>
                 <td className="hidden px-3 py-2.5 md:table-cell">
                   <PriorityFlag priority={task.priority} />

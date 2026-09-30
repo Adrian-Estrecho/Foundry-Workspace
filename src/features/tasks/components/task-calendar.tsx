@@ -25,7 +25,8 @@ import { formatDay } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { rescheduleTask } from "../actions";
 import { monthGrid, monthLabel, shiftMonth } from "../calendar";
-import { priorityRank, taskStatusMeta } from "../constants";
+import { statusColor } from "@/features/statuses/constants";
+import { priorityRank } from "../constants";
 import type { TaskSummary } from "../queries";
 import { PriorityFlag, TaskStatusChip } from "./task-bits";
 import { taskContext } from "./task-card";
@@ -272,7 +273,7 @@ function DayCell({ day, inMonth, isToday, tasks }: { day: string; inMonth: boole
                     className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-sm hover:bg-accent"
                   >
                     <span className="min-w-0 flex-1 truncate">{task.title}</span>
-                    <TaskStatusChip status={task.status} />
+                    <TaskStatusChip status={task.statusInfo} />
                   </Link>
                 </li>
               ))}
@@ -305,9 +306,9 @@ function ChipBody({ task, today, overlay }: { task: TaskSummary; today: string; 
         done && "text-muted-foreground",
         overlay && "w-44 cursor-grabbing bg-popover shadow-lg",
       )}
-      title={`${task.title} · ${taskStatusMeta(task.status).label}${task.assignee ? ` · ${task.assignee.name}` : ""}`}
+      title={`${task.title} · ${task.statusInfo.name}${task.assignee ? ` · ${task.assignee.name}` : ""}`}
     >
-      <span className={cn("size-1.5 shrink-0 rounded-full", taskStatusMeta(task.status).dot)} />
+      <span className={cn("size-1.5 shrink-0 rounded-full", statusColor(task.statusInfo.color).dot)} />
       <span className={cn("truncate", done && "line-through decoration-muted-foreground/40")}>{task.title}</span>
     </span>
   );

@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { createTask, updateTask } from "../actions";
-import { TASK_PRIORITIES, TASK_STATUSES, type TaskPriority, type TaskStatus } from "../constants";
+import { TASK_PRIORITIES, type TaskPriority, type TaskStatus, type TaskStatusDef } from "../constants";
 import type { TaskFormOptions } from "../queries";
 import { TaskStatusChip } from "./task-bits";
 
@@ -22,7 +22,9 @@ export type TaskDraft = {
   assigneeId?: string | null;
   dueDate?: string | null;
   priority?: TaskPriority;
+  /** The stage, when that's all that's known (a new task starts in its first status). */
   status?: TaskStatus;
+  statusId?: string;
 };
 
 /**
@@ -35,16 +37,20 @@ export function TaskFormDialog({
   onOpenChange,
   task,
   options,
+  statuses,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   task: TaskDraft;
   options: TaskFormOptions;
+  statuses: TaskStatusDef[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const editing = Boolean(task.id);
+  const status =
+    statuses.find((s) => s.id === task.statusId) ?? statuses.find((s) => s.stage === (task.status ?? "todo")) ?? statuses[0];
 
   // Inactive editors and delivered projects only show up if the task already uses them.
   const editors = options.editors.filter((e) => e.isActive || e.id === task.assigneeId);
@@ -134,17 +140,15 @@ export function TaskFormDialog({
             // Status changes from the status menu, so saving here never undoes a move made meanwhile.
             <div className="grid content-start gap-2">
               <span className="text-sm font-medium">Status</span>
-              <span className="flex h-10 items-center">
-                <TaskStatusChip status={task.status ?? "todo"} />
-              </span>
+              <span className="flex h-10 items-center">{status && <TaskStatusChip status={status} />}</span>
               <span className="text-xs text-muted-foreground">Change it from the status menu on the task.</span>
             </div>
           ) : (
-            <FormRow label="Status" error={errors.status}>
-              <NativeSelect name="status" defaultValue={task.status ?? "todo"}>
-                {TASK_STATUSES.map((status) => (
-                  <option key={status.value} value={status.value}>
-                    {status.label}
+            <FormRow label="Status" error={errors.status_id}>
+              <NativeSelect name="status_id" defaultValue={status?.id}>
+                {statuses.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.name}
                   </option>
                 ))}
               </NativeSelect>

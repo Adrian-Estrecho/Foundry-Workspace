@@ -3,7 +3,7 @@ import { AlertTriangleIcon, CalendarCheck2Icon } from "lucide-react";
 import { EmptyState, Panel } from "@/components/shared/panel";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { dueLabel } from "@/lib/dates";
-import { PRIORITY_META, TASK_STATUS_LABEL } from "@/lib/status";
+import { PRIORITY_META } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import type { DueTask } from "./queries";
 
@@ -85,7 +85,7 @@ function TaskRow({ task, today, showAssignee, overdue }: { task: DueTask; today:
             {task.context}
           </span>
         </span>
-        <span className="hidden text-xs text-muted-foreground sm:inline">{TASK_STATUS_LABEL[task.status]}</span>
+        <span className="hidden text-xs text-muted-foreground sm:inline">{task.statusName}</span>
         <span className={cn("shrink-0 text-xs font-medium tabular", overdue ? "text-danger" : task.dueDate === today ? "text-warning" : "text-muted-foreground")}>
           {dueLabel(task.dueDate, today)}
         </span>

@@ -12,10 +12,11 @@ import { Constants } from "@/types/database";
 /**
  * Task actions. Admins can do everything. Editors act on their own tasks:
  * RLS limits them to tasks assigned to them, and the guard_task_changes
- * trigger limits what they can change (status up to For Review, progress).
+ * trigger limits what they can change (statuses up to the For Review stage,
+ * progress). Tasks move by status_id, one of the workspace's statuses; the
+ * trigger keeps the stage (tasks.status) in step.
  */
 
-const statusSchema = z.enum(Constants.public.Enums.task_status);
 const prioritySchema = z.enum(Constants.public.Enums.task_priority);
 const idSchema = z.uuid();
 
@@ -35,12 +36,15 @@ function dbError(error: { code?: string; message: string }) {
   return error.message;
 }
 
-/** Position at the end of a status column. */
-async function endOfColumn(supabase: Awaited<ReturnType<typeof createClient>>, status: z.infer<typeof statusSchema>) {
+/** Position at the end of a status column (or of a whole stage). */
+async function endOfColumn(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  column: { status_id: string } | { status: "done" | "revisions" },
+) {
   const { data } = await supabase
     .from("tasks")
     .select("position")
-    .eq("status", status)
+    .match(column)
     .order("position", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -57,7 +61,7 @@ const taskSchema = z.object({
   assignee_id: z.preprocess(blankToNull, z.uuid().nullable()),
   due_date: z.preprocess(blankToNull, z.iso.date("Pick a valid date.").nullable()),
   priority: prioritySchema,
-  status: statusSchema,
+  status_id: z.uuid("Pick a status."),
 });
 
 export async function createTask(formData: FormData): Promise<ActionResult<{ id: string }>> {
@@ -72,7 +76,7 @@ export async function createTask(formData: FormData): Promise<ActionResult<{ id:
     .map((line) => line.slice(0, 200));
 
   const supabase = await createClient();
-  const position = await endOfColumn(supabase, parsed.data.status);
+  const position = await endOfColumn(supabase, { status_id: parsed.data.status_id });
   const { data, error } = await supabase
     .from("tasks")
     .insert({ ...parsed.data, position, created_by: user.id })
@@ -98,7 +102,7 @@ export async function createTask(formData: FormData): Promise<ActionResult<{ id:
 export async function updateTask(id: string, formData: FormData): Promise<ActionResult> {
   await requireAdmin();
   if (!idSchema.safeParse(id).success) return fail("Invalid task.");
-  const parsed = taskSchema.omit({ status: true }).safeParse(Object.fromEntries(formData));
+  const parsed = taskSchema.omit({ status_id: true }).safeParse(Object.fromEntries(formData));
   if (!parsed.success) return fail("Please check the highlighted fields.", fieldErrorsOf(parsed.error));
 
   const supabase = await createClient();
@@ -138,15 +142,21 @@ export async function deleteTask(id: string): Promise<ActionResult> {
 // -----------------------------------------------------------------------------
 
 /**
- * Drag-and-drop on the board: new status and/or order within the column.
- * Dropping on Revisions can carry feedback, which is posted as a comment
+ * Moves a task to one of the workspace's statuses: a board drop (with the
+ * order in the column) or a status menu (null position: end of the column).
+ * Moving into Revisions can carry feedback, which is posted as a comment
  * first so the editor's notification includes it.
  */
-export async function moveTask(id: string, status: string, position: number, feedback?: string): Promise<ActionResult> {
+export async function moveTask(id: string, statusId: string, position: number | null, feedback?: string): Promise<ActionResult> {
   const user = await requireUser();
   const parsed = z
-    .object({ id: idSchema, status: statusSchema, position: z.number().finite(), feedback: z.string().trim().max(4000).optional() })
-    .safeParse({ id, status, position, feedback });
+    .object({
+      id: idSchema,
+      statusId: idSchema,
+      position: z.number().finite().nullable(),
+      feedback: z.string().trim().max(4000).optional(),
+    })
+    .safeParse({ id, statusId, position, feedback });
   if (!parsed.success) return fail("Invalid move.");
 
   const supabase = await createClient();
@@ -154,9 +164,10 @@ export async function moveTask(id: string, status: string, position: number, fee
     const { error } = await supabase.from("task_comments").insert({ task_id: id, author_id: user.id, body: parsed.data.feedback });
     if (error) return fail(dbError(error));
   }
+  const at = parsed.data.position ?? (await endOfColumn(supabase, { status_id: parsed.data.statusId }));
   const { data, error } = await supabase
     .from("tasks")
-    .update({ status: parsed.data.status, position: parsed.data.position })
+    .update({ status_id: parsed.data.statusId, position: at })
     .eq("id", id)
     .select("project_id")
     .maybeSingle();
@@ -167,28 +178,10 @@ export async function moveTask(id: string, status: string, position: number, fee
   return { ok: true };
 }
 
-/** Status change from a menu or button: the task goes to the end of its new column. */
-export async function setTaskStatus(id: string, status: string): Promise<ActionResult> {
-  await requireUser();
-  const parsed = z.object({ id: idSchema, status: statusSchema }).safeParse({ id, status });
-  if (!parsed.success) return fail("Invalid status.");
-
-  const supabase = await createClient();
-  const position = await endOfColumn(supabase, parsed.data.status);
-  const { data, error } = await supabase
-    .from("tasks")
-    .update({ status: parsed.data.status, position })
-    .eq("id", id)
-    .select("project_id")
-    .maybeSingle();
-  if (error) return fail(dbError(error));
-  if (!data) return fail("You can't change this task.");
-
-  revalidateTask(id, data.project_id);
-  return { ok: true };
-}
-
-/** An admin's review of work handed in: approve (Done) or send back with feedback. */
+/**
+ * An admin's review of work handed in: approve (Done) or send back with
+ * feedback. The task goes to the first status of that stage.
+ */
 export async function reviewTask(id: string, decision: "done" | "revisions", feedback: string): Promise<ActionResult> {
   const user = await requireAdmin();
   const parsed = z
@@ -202,7 +195,7 @@ export async function reviewTask(id: string, decision: "done" | "revisions", fee
     const { error } = await supabase.from("task_comments").insert({ task_id: id, author_id: user.id, body: parsed.data.feedback });
     if (error) return fail(dbError(error));
   }
-  const position = await endOfColumn(supabase, parsed.data.decision);
+  const position = await endOfColumn(supabase, { status: parsed.data.decision });
   const { data, error } = await supabase
     .from("tasks")
     .update({ status: parsed.data.decision, position })

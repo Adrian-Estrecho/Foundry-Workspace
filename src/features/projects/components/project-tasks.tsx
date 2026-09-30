@@ -5,7 +5,7 @@ import { ListTodoIcon, PlusIcon } from "lucide-react";
 import { EmptyState } from "@/components/shared/panel";
 import { Segmented } from "@/components/shared/segmented";
 import { Button } from "@/components/ui/button";
-import { RECENT_DONE_DAYS } from "@/features/tasks/constants";
+import { RECENT_DONE_DAYS, type TaskStatusDef } from "@/features/tasks/constants";
 import type { TaskFormOptions, TaskSummary } from "@/features/tasks/queries";
 import { TaskBoard } from "@/features/tasks/components/task-board";
 import { TaskList } from "@/features/tasks/components/task-list";
@@ -22,6 +22,7 @@ export function ProjectTasks({
   today,
   doneSince,
   options,
+  statuses,
 }: {
   projectId: string;
   tasks: TaskSummary[];
@@ -30,6 +31,7 @@ export function ProjectTasks({
   /** Done tasks completed before this (ISO time) stay off the board. */
   doneSince: string;
   options: TaskFormOptions | null;
+  statuses: TaskStatusDef[];
 }) {
   const [view, setView] = React.useState<"board" | "list">("board");
   const open = tasks.filter((t) => t.status !== "done").length;
@@ -40,7 +42,7 @@ export function ProjectTasks({
   const olderDone = tasks.length - onBoard.length;
 
   return (
-    <TaskWorkspace isAdmin={isAdmin} today={today} options={options}>
+    <TaskWorkspace isAdmin={isAdmin} today={today} options={options} statuses={statuses}>
       <section aria-labelledby="project-tasks" className="min-w-0">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <h2 id="project-tasks" className="mr-auto font-heading text-lg font-medium">

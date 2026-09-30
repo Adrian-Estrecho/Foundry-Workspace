@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { addDays } from "@/lib/dates";
 import { cn } from "@/lib/utils";
-import { priorityRank } from "../constants";
+import { priorityRank, type TaskStatusDef } from "../constants";
 import type { TaskSummary } from "../queries";
 import { DueChip, PriorityFlag, TaskStatusChip } from "./task-bits";
 import { TaskBoard } from "./task-board";
@@ -31,7 +31,17 @@ const byDue = (a: TaskSummary, b: TaskSummary) =>
   (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999") || priorityRank(b.priority) - priorityRank(a.priority);
 
 /** An editor's own work: overdue, today, upcoming, plus what's waiting on review. */
-export function MyTasks({ tasks, today, view }: { tasks: TaskSummary[]; today: string; view: "list" | "board" }) {
+export function MyTasks({
+  tasks,
+  statuses,
+  today,
+  view,
+}: {
+  tasks: TaskSummary[];
+  statuses: TaskStatusDef[];
+  today: string;
+  view: "list" | "board";
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const [pending, startTransition] = React.useTransition();
@@ -44,7 +54,7 @@ export function MyTasks({ tasks, today, view }: { tasks: TaskSummary[]; today: s
   const thisWeek = upcoming.filter((t) => t.dueDate && t.dueDate <= addDays(today, 6));
 
   return (
-    <TaskWorkspace isAdmin={false} today={today} options={null}>
+    <TaskWorkspace isAdmin={false} today={today} options={null} statuses={statuses}>
       <PageHeader
         title="My Tasks"
         description={
@@ -173,13 +183,13 @@ function MyTaskRow({ task }: { task: TaskSummary }) {
             )}
           </span>
           <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 sm:hidden">
-            <TaskStatusChip status={task.status} />
+            <TaskStatusChip status={task.statusInfo} />
             <DueChip dueDate={task.dueDate} today={workspace.today} done={done} />
           </span>
         </span>
         <span className="hidden shrink-0 items-center gap-3 sm:flex">
           <PriorityFlag priority={task.priority} />
-          <TaskStatusChip status={task.status} />
+          <TaskStatusChip status={task.statusInfo} />
           <span className="w-24 text-right">
             <DueChip dueDate={task.dueDate} today={workspace.today} done={done} />
           </span>

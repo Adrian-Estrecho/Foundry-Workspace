@@ -7,7 +7,8 @@ import { EmptyState, Panel } from "@/components/shared/panel";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { Button } from "@/components/ui/button";
 import { ProjectFormDialog, type EditorOption } from "@/features/projects/components/project-form-dialog";
-import { projectStatusMeta, type ProjectStatus } from "@/features/projects/constants";
+import { PROJECT_STAGES, type ProjectStatus } from "@/features/projects/constants";
+import { StatusDot } from "@/features/statuses/components/status-chip";
 import { dueLabel } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +16,8 @@ type Project = {
   id: string;
   name: string;
   status: ProjectStatus;
+  /** The workspace's status; the stage's name is shown if it's missing. */
+  statusInfo: { name: string; color: string } | null;
   deadline: string | null;
   editors: { id: string; name: string; avatarUrl: string | null }[];
 };
@@ -52,7 +55,10 @@ export function ProjectsPanel({
       ) : (
         <ul className="grid gap-2">
           {projects.map((project) => {
-            const status = projectStatusMeta(project.status);
+            const status = project.statusInfo ?? {
+              name: PROJECT_STAGES.find((s) => s.value === project.status)?.label ?? project.status,
+              color: "grey",
+            };
             return (
               <li key={project.id}>
                 <Link
@@ -62,7 +68,7 @@ export function ProjectsPanel({
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">{project.name}</span>
                     <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <span className={cn("size-2 rounded-full", status.dot)} /> {status.label}
+                      <StatusDot color={status.color} /> {status.name}
                       {project.deadline && project.status !== "delivered" && (
                         <span className={cn(project.deadline < today && "text-danger")}> · {dueLabel(project.deadline, today)}</span>
                       )}

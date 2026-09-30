@@ -1,21 +1,25 @@
+import type { StageInfo, StatusDef } from "@/features/statuses/constants";
 import type { Enums } from "@/types/database";
 
+/** A task's stage. Each workspace's own statuses sit in these, and behave like them. */
 export type TaskStatus = Enums<"task_status">;
 export type TaskPriority = Enums<"task_priority">;
+/** One of the workspace's task statuses. */
+export type TaskStatusDef = StatusDef<TaskStatus>;
 
-/** Board columns, in order. `dot` colours the column marker and status chips. */
-export const TASK_STATUSES: { value: TaskStatus; label: string; dot: string; chip: string }[] = [
-  { value: "todo", label: "To Do", dot: "bg-muted-foreground", chip: "bg-muted text-muted-foreground ring-border" },
-  { value: "in_progress", label: "In Progress", dot: "bg-status-online", chip: "bg-status-online/12 text-status-online ring-status-online/25" },
-  { value: "for_review", label: "For Review", dot: "bg-warning", chip: "bg-warning/12 text-warning ring-warning/25" },
-  { value: "revisions", label: "Revisions", dot: "bg-danger", chip: "bg-danger/10 text-danger ring-danger/25" },
-  { value: "done", label: "Done", dot: "bg-success", chip: "bg-success/12 text-success ring-success/25" },
+/** The fixed stages, in board order. */
+export const TASK_STAGES: StageInfo<TaskStatus>[] = [
+  { value: "todo", label: "To Do", hint: "Not started yet." },
+  { value: "in_progress", label: "In Progress", hint: "Being worked on." },
+  { value: "for_review", label: "For Review", hint: "Handed in. Admins are notified to review it." },
+  { value: "revisions", label: "Revisions", hint: "Sent back with feedback. Only admins move tasks here." },
+  { value: "done", label: "Done", hint: "Finished. Only admins move tasks here, and editors can't reopen them." },
 ];
 
-export const taskStatusMeta = (status: TaskStatus) => TASK_STATUSES.find((s) => s.value === status) ?? TASK_STATUSES[0];
+export const taskStageLabel = (stage: TaskStatus) => TASK_STAGES.find((s) => s.value === stage)?.label ?? stage;
 
 /** Editors move their own work only this far; an admin decides Done or Revisions. */
-export const EDITOR_STATUSES: TaskStatus[] = ["todo", "in_progress", "for_review"];
+export const EDITOR_STAGES: TaskStatus[] = ["todo", "in_progress", "for_review"];
 
 export const TASK_PRIORITIES: { value: TaskPriority; label: string; rank: number }[] = [
   { value: "urgent", label: "Urgent", rank: 4 },

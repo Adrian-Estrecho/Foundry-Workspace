@@ -65,6 +65,8 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
     <>
       <RealtimeRefresh channel={`project-${id}`} tables="projects,project_editors,tasks,subtasks,task_comments" />
       <ProjectHeader
+        statusInfo={data.statusInfo}
+        statuses={data.projectStatuses}
         project={{
           id: project.id,
           clientId: project.client_id,
@@ -181,6 +183,7 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
         today={today}
         doneSince={new Date(renderedAt - RECENT_DONE_DAYS * 86_400_000).toISOString()}
         options={data.taskOptions}
+        statuses={data.taskStatuses}
       />
 
       <div className={cn("mt-6 grid grid-cols-1 gap-5", isAdmin && "lg:grid-cols-2")}>

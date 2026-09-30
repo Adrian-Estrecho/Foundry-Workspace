@@ -6,7 +6,7 @@ import { NativeSelect } from "@/components/shared/form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { DUE_FILTERS, TASK_PRIORITIES, TASK_STATUSES } from "../constants";
+import { DUE_FILTERS, TASK_PRIORITIES, TASK_STAGES, type TaskStatusDef } from "../constants";
 import { activeFilterCount, type TaskFilters } from "../filters";
 import type { TaskFormOptions } from "../queries";
 
@@ -18,11 +18,13 @@ import type { TaskFormOptions } from "../queries";
 export function TaskFilterBar({
   filters,
   options,
+  statuses,
   onChange,
   hide = [],
 }: {
   filters: TaskFilters;
   options: TaskFormOptions;
+  statuses: TaskStatusDef[];
   onChange: (patch: Partial<TaskFilters>) => void;
   /** Filters that don't apply to the current view. */
   hide?: ("status" | "due")[];
@@ -52,6 +54,8 @@ export function TaskFilterBar({
   const clients = [...new Map(options.projects.map((p) => [p.clientId, p.clientName])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
   const projects = options.projects.filter((p) => !filters.client || p.clientId === filters.client);
   const editors = options.editors.filter((e) => e.isActive || e.id === filters.editor);
+  // Links like "waiting for review" filter by a whole stage rather than one status.
+  const stageFilter = TASK_STAGES.find((stage) => stage.value === filters.status);
 
   const select = "h-9 w-full rounded-lg bg-card sm:w-auto sm:min-w-36";
 
@@ -137,9 +141,10 @@ export function TaskFilterBar({
             onChange={(event) => onChange({ status: (event.target.value || null) as TaskFilters["status"] })}
           >
             <option value="">Any status</option>
-            {TASK_STATUSES.map((status) => (
-              <option key={status.value} value={status.value}>
-                {status.label}
+            {stageFilter && <option value={stageFilter.value}>All in {stageFilter.label}</option>}
+            {statuses.map((status) => (
+              <option key={status.id} value={status.id}>
+                {status.name}
               </option>
             ))}
           </NativeSelect>

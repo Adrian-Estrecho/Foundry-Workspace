@@ -6,7 +6,6 @@ import { fail, fieldErrorsOf } from "@/lib/action-result";
 import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { Constants } from "@/types/database";
 
 export type ProjectActionResult =
   | { ok: true; projectId: string }
@@ -18,7 +17,6 @@ const link = z.preprocess(
   (v) => (typeof v === "string" && v.trim() === "" ? null : v),
   z.url({ protocol: /^https?$/, error: "Enter a full link starting with https://" }).nullable(),
 );
-const statusSchema = z.enum(Constants.public.Enums.project_status);
 
 // Status isn't part of the form: it changes only through setProjectStatus, so
 // a form opened earlier can't put back an old status.
@@ -121,15 +119,16 @@ export async function updateProject(id: string, formData: FormData): Promise<Pro
   return { ok: true, projectId: id };
 }
 
-export async function setProjectStatus(id: string, status: string): Promise<ProjectActionResult> {
+/** Moves the project to one of the workspace's project statuses (the stage follows). */
+export async function setProjectStatus(id: string, statusId: string): Promise<ProjectActionResult> {
   await requireAdmin();
-  const parsed = z.object({ id: z.uuid(), status: statusSchema }).safeParse({ id, status });
+  const parsed = z.object({ id: z.uuid(), statusId: z.uuid() }).safeParse({ id, statusId });
   if (!parsed.success) return fail("Invalid status.");
 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("projects")
-    .update({ status: parsed.data.status })
+    .update({ status_id: parsed.data.statusId })
     .eq("id", id)
     .select("client_id")
     .maybeSingle();

@@ -15,7 +15,7 @@ import { StatusChip } from "@/components/shared/status";
 import { Progress } from "@/components/ui/progress";
 import type { CurrentUser } from "@/lib/auth";
 import { dueLabel, formatDuration, greeting, timeAgo, toHours } from "@/lib/dates";
-import { PRIORITY_META, TASK_STATUS_LABEL } from "@/lib/status";
+import { PRIORITY_META } from "@/lib/status";
 import { cn, firstName } from "@/lib/utils";
 import { CompletedBars } from "./completed-bars";
 import { HoursChart } from "./hours-chart";
@@ -147,7 +147,7 @@ function TaskGroup({
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">{task.title}</span>
                 <span className="block truncate text-xs text-muted-foreground">
-                  {task.projectName} · {TASK_STATUS_LABEL[task.status]}
+                  {task.projectName} · {task.statusName}
                 </span>
               </span>
               <span className="hidden w-20 sm:block">

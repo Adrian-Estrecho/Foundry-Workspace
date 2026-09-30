@@ -1,11 +1,14 @@
 import "server-only";
 import { notFound } from "next/navigation";
+import type { StatusBadge, StatusColor } from "@/features/statuses/constants";
+import { getTaskStatuses } from "@/features/statuses/queries";
 import { workspaceAdmins } from "@/features/workspaces/queries";
 import type { CurrentUser } from "@/lib/auth";
 import { addDays, todayIn } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/server";
+import { one } from "@/lib/utils";
 import { monthGrid } from "./calendar";
-import { RECENT_DONE_DAYS, type TaskPriority, type TaskStatus } from "./constants";
+import { RECENT_DONE_DAYS, TASK_STAGES, taskStageLabel, type TaskPriority, type TaskStatus } from "./constants";
 import type { TaskFilters } from "./filters";
 
 export type Person = { id: string; name: string; avatarUrl: string | null };
@@ -14,7 +17,10 @@ export type Person = { id: string; name: string; avatarUrl: string | null };
 export type TaskSummary = {
   id: string;
   title: string;
+  /** The stage, which decides the rules (Done, review, what editors may do). */
   status: TaskStatus;
+  /** The workspace's own status the task is in. */
+  statusInfo: StatusBadge;
   priority: TaskPriority;
   dueDate: string | null;
   position: number;
@@ -39,9 +45,12 @@ const TASK_FIELDS = `id, title, status, priority, due_date, position, progress_p
   project:projects(id, name, client_id),
   subtasks(is_done),
   comments:task_comments(count),
-  attachments:task_attachments(count)`;
+  attachments:task_attachments(count),
+  status_info:task_statuses!tasks_status_id_fkey(id, name, color)`;
 
 const NO_MATCH = "00000000-0000-0000-0000-000000000000";
+
+const isStage = (value: string): value is TaskStatus => TASK_STAGES.some((stage) => stage.value === value);
 
 /**
  * Client names by id. Goes through client_directory, which editors can read
@@ -73,6 +82,17 @@ type TaskRow = {
   subtasks: { is_done: boolean }[];
   comments: { count: number }[];
   attachments: { count: number }[];
+  status_info: RawStatus | RawStatus[] | null;
+};
+
+type RawStatus = { id: string; name: string; color: string };
+
+/** The task's status, for chips. Falls back to the stage if it can't be read. */
+const toStatusBadge = (raw: RawStatus | RawStatus[] | null, stage: TaskStatus): StatusBadge => {
+  const status = one(raw);
+  return status
+    ? { id: status.id, name: status.name, color: status.color as StatusColor }
+    : { id: stage, name: taskStageLabel(stage), color: "grey" };
 };
 
 async function toSummaries(rows: TaskRow[]): Promise<TaskSummary[]> {
@@ -81,6 +101,7 @@ async function toSummaries(rows: TaskRow[]): Promise<TaskSummary[]> {
     id: row.id,
     title: row.title,
     status: row.status,
+    statusInfo: toStatusBadge(row.status_info, row.status),
     priority: row.priority,
     dueDate: row.due_date,
     position: row.position,
@@ -154,7 +175,7 @@ export async function getTasksPage(user: CurrentUser, filters: TaskFilters) {
   else if (filters.editor) query = query.eq("assignee_id", filters.editor);
   if (filters.project) query = query.eq("project_id", filters.project);
   if (clientProjectIds) query = query.in("project_id", clientProjectIds.length ? clientProjectIds : [NO_MATCH]);
-  if (filters.status) query = query.eq("status", filters.status);
+  if (filters.status) query = isStage(filters.status) ? query.eq("status", filters.status) : query.eq("status_id", filters.status);
   if (filters.priority) query = query.eq("priority", filters.priority);
   if (filters.q) query = query.ilike("title", `%${filters.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
 
@@ -174,9 +195,10 @@ export async function getTasksPage(user: CurrentUser, filters: TaskFilters) {
   }
 
   const count = { count: "exact" as const, head: true };
-  const [{ data, error }, options, open, overdue, forReview] = await Promise.all([
+  const [{ data, error }, options, statuses, open, overdue, forReview] = await Promise.all([
     query,
     getTaskFormOptions(),
+    getTaskStatuses(),
     supabase.from("tasks").select("id", count).neq("status", "done"),
     supabase.from("tasks").select("id", count).lt("due_date", today).neq("status", "done"),
     supabase.from("tasks").select("id", count).eq("status", "for_review"),
@@ -186,6 +208,7 @@ export async function getTasksPage(user: CurrentUser, filters: TaskFilters) {
   return {
     tasks: await toSummaries(data ?? []),
     options,
+    statuses,
     today,
     month,
     counts: { open: open.count ?? 0, overdue: overdue.count ?? 0, forReview: forReview.count ?? 0 },
@@ -198,15 +221,18 @@ export async function getTasksPage(user: CurrentUser, filters: TaskFilters) {
 export async function getMyTasks(user: CurrentUser) {
   const supabase = await createClient();
   const since = new Date(Date.now() - RECENT_DONE_DAYS * 86_400_000).toISOString();
-  const { data, error } = await supabase
-    .from("tasks")
-    .select(TASK_FIELDS)
-    .eq("assignee_id", user.id)
-    .or(`status.neq.done,completed_at.gte."${since}"`)
-    .order("position")
-    .limit(500);
+  const [{ data, error }, statuses] = await Promise.all([
+    supabase
+      .from("tasks")
+      .select(TASK_FIELDS)
+      .eq("assignee_id", user.id)
+      .or(`status.neq.done,completed_at.gte."${since}"`)
+      .order("position")
+      .limit(500),
+    getTaskStatuses(),
+  ]);
   if (error) throw error;
-  return { tasks: await toSummaries(data ?? []), today: todayIn(user.timezone) };
+  return { tasks: await toSummaries(data ?? []), statuses, today: todayIn(user.timezone) };
 }
 
 /** Tasks in one project (editors get only their own, through RLS). */
@@ -233,13 +259,14 @@ export async function getTaskDetail(id: string, user: CurrentUser) {
        creator:profiles!tasks_created_by_fkey(full_name),
        subtasks(*),
        attachments:task_attachments(*, adder:profiles(full_name)),
-       comments:task_comments(*, author:profiles(id, full_name, avatar_url))`,
+       comments:task_comments(*, author:profiles(id, full_name, avatar_url)),
+       status_info:task_statuses!tasks_status_id_fkey(id, name, color)`,
     )
     .eq("id", id)
     .maybeSingle();
   if (!task) notFound();
 
-  const [clients, admins, time, activity, options] = await Promise.all([
+  const [clients, admins, time, activity, options, statuses] = await Promise.all([
     clientNames([task.project?.client_id]),
     workspaceAdmins(supabase, user.workspace.id),
     supabase.rpc("task_time", { p_task_id: id }),
@@ -252,6 +279,7 @@ export async function getTaskDetail(id: string, user: CurrentUser) {
           .limit(12)
       : Promise.resolve({ data: [] }),
     admin ? getTaskFormOptions() : Promise.resolve(null),
+    getTaskStatuses(),
   ]);
 
   // Files are private: hand out short-lived links.
@@ -298,6 +326,8 @@ export async function getTaskDetail(id: string, user: CurrentUser) {
 
   return {
     task,
+    statusInfo: toStatusBadge(task.status_info, task.status),
+    statuses,
     assignee,
     assigneeActive: task.assignee?.is_active ?? true,
     project: task.project,

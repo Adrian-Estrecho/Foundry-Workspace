@@ -86,7 +86,7 @@ export function TaskCard({
           )}
           <span className="ml-auto">
             {show === "status" ? (
-              <TaskStatusChip status={task.status} />
+              <TaskStatusChip status={task.statusInfo} />
             ) : task.assignee ? (
               <UserAvatar name={task.assignee.name} src={task.assignee.avatarUrl} className="size-6" />
             ) : (

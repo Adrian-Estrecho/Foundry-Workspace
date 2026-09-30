@@ -1,7 +1,9 @@
 import "server-only";
 import type { CurrentUser } from "@/lib/auth";
 import { addDays, startOfWeek, todayIn } from "@/lib/dates";
+import { TASK_STATUS_LABEL } from "@/lib/status";
 import { createClient } from "@/lib/supabase/server";
+import { one } from "@/lib/utils";
 import type { Enums } from "@/types/database";
 
 /** "Online" before the first presence sync: seen within the last 3 minutes. */
@@ -27,6 +29,8 @@ export type DueTask = {
   dueDate: string;
   priority: Enums<"task_priority">;
   status: Enums<"task_status">;
+  /** The workspace's name for the task's status. */
+  statusName: string;
   assigneeId: string | null;
   assigneeName: string | null;
   assigneeAvatar: string | null;
@@ -108,6 +112,7 @@ export async function getAdminDashboard(user: CurrentUser) {
       .from("tasks")
       .select(
         `id, title, due_date, priority, status, assignee_id,
+         status_info:task_statuses!tasks_status_id_fkey(name),
          assignee:editors!tasks_assignee_id_fkey(profile:profiles!editors_id_fkey(full_name, avatar_url)),
          project:projects(name, client:clients(company))`,
       )
@@ -149,6 +154,7 @@ export async function getAdminDashboard(user: CurrentUser) {
     dueDate: task.due_date!,
     priority: task.priority,
     status: task.status,
+    statusName: one(task.status_info)?.name ?? TASK_STATUS_LABEL[task.status],
     assigneeId: task.assignee_id,
     assigneeName: task.assignee?.profile?.full_name ?? null,
     assigneeAvatar: task.assignee?.profile?.avatar_url ?? null,
@@ -205,7 +211,7 @@ export async function getEditorDashboard(user: CurrentUser) {
       .maybeSingle(),
     supabase
       .from("tasks")
-      .select("id, title, due_date, priority, status, progress_pct, project:projects(name)")
+      .select("id, title, due_date, priority, status, progress_pct, project:projects(name), status_info:task_statuses!tasks_status_id_fkey(name)")
       .eq("assignee_id", user.id)
       .neq("status", "done")
       .order("due_date", { nullsFirst: false })
@@ -248,6 +254,7 @@ export async function getEditorDashboard(user: CurrentUser) {
       dueDate: t.due_date,
       priority: t.priority,
       status: t.status,
+      statusName: one(t.status_info)?.name ?? TASK_STATUS_LABEL[t.status],
       progress: t.progress_pct,
       projectName: t.project?.name ?? "Internal",
     })),

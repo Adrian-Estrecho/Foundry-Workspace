@@ -25,11 +25,12 @@ import { OnboardingPanel } from "@/features/editors/components/profile/onboardin
 import { TrialTaskPanel } from "@/features/editors/components/profile/trial-task-panel";
 import { WEEKDAYS } from "@/features/editors/constants";
 import { getEditorProfile } from "@/features/editors/queries";
+import { StatusDot } from "@/features/statuses/components/status-chip";
 import { requireAdmin } from "@/lib/auth";
 import { dueLabel, formatDay, formatDuration, timeAgo, toHours } from "@/lib/dates";
 import { TASK_STATUS_LABEL } from "@/lib/status";
 import { localTime, zoneCity } from "@/lib/time-zones";
-import { cn } from "@/lib/utils";
+import { cn, one } from "@/lib/utils";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RECENT_MS = 3 * 60 * 1000;
@@ -136,18 +137,13 @@ export default async function EditorPage(props: PageProps<"/editors/[id]">) {
                 {[...data.openTasks, ...data.recentDone].map((task) => (
                   <li key={task.id}>
                     <Link href={`/tasks/${task.id}`} className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-accent/40">
-                      <span
-                        className={cn(
-                          "size-2 shrink-0 rounded-full",
-                          task.status === "done" ? "bg-success" : task.status === "revisions" ? "bg-danger" : task.status === "for_review" ? "bg-warning" : "bg-primary",
-                        )}
-                      />
+                      <StatusDot color={one(task.status_info)?.color ?? "grey"} />
                       <span className="min-w-0 flex-1">
                         <span className={cn("block truncate text-sm font-medium", task.status === "done" && "text-muted-foreground")}>
                           {task.title}
                         </span>
                         <span className="block truncate text-xs text-muted-foreground">
-                          {task.project?.name ?? "Internal"} · {TASK_STATUS_LABEL[task.status]}
+                          {task.project?.name ?? "Internal"} · {one(task.status_info)?.name ?? TASK_STATUS_LABEL[task.status]}
                         </span>
                       </span>
                       <span

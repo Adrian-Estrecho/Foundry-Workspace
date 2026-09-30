@@ -1,7 +1,7 @@
 import { renderEmail, type EmailCard, type EmailChip, type EmailContent, type EmailItem, type EmailTone } from "@/lib/email/render";
 import { dueLabel, formatDay, todayIn } from "@/lib/dates";
 import { firstName } from "@/lib/utils";
-import { taskStatusMeta, type TaskPriority, type TaskStatus } from "@/features/tasks/constants";
+import { taskStageLabel, type TaskPriority, type TaskStatus } from "@/features/tasks/constants";
 import type { Enums, Json } from "@/types/database";
 
 /**
@@ -133,7 +133,7 @@ const plain = (html: string | null) =>
         .trim()
     : "";
 
-const status = (s: TaskStatus) => taskStatusMeta(s).label;
+const status = (s: TaskStatus) => taskStageLabel(s);
 
 function dueChip(task: EmailTask, today: string): EmailChip | null {
   if (!task.due_date) return null;

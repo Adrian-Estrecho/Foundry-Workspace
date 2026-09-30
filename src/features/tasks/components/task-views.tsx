@@ -7,7 +7,7 @@ import { CalendarDaysIcon, KanbanSquareIcon, ListIcon, PlusIcon, UsersIcon } fro
 import { PageHeader } from "@/components/shared/panel";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { RECENT_DONE_DAYS, TASK_VIEWS, type TaskView } from "../constants";
+import { RECENT_DONE_DAYS, TASK_VIEWS, type TaskStatusDef, type TaskView } from "../constants";
 import { taskFiltersQuery, type TaskFilters } from "../filters";
 import type { TaskFormOptions, TaskSummary } from "../queries";
 import { TaskBoard } from "./task-board";
@@ -29,6 +29,7 @@ export function TaskViews({
   tasks,
   filters,
   options,
+  statuses,
   today,
   month,
   counts,
@@ -36,6 +37,7 @@ export function TaskViews({
   tasks: TaskSummary[];
   filters: TaskFilters;
   options: TaskFormOptions;
+  statuses: TaskStatusDef[];
   today: string;
   month: string;
   counts: { open: number; overdue: number; forReview: number };
@@ -48,7 +50,7 @@ export function TaskViews({
     startTransition(() => router.replace(`${pathname}${taskFiltersQuery({ ...filters, ...patch })}`, { scroll: false }));
 
   return (
-    <TaskWorkspace isAdmin today={today} options={options}>
+    <TaskWorkspace isAdmin today={today} options={options} statuses={statuses}>
       <PageHeader
         title="Tasks"
         description={
@@ -88,7 +90,7 @@ export function TaskViews({
         })}
       </nav>
 
-      <TaskFilterBar filters={filters} options={options} onChange={navigate} hide={filters.view === "calendar" ? ["due"] : []} />
+      <TaskFilterBar filters={filters} options={options} statuses={statuses} onChange={navigate} hide={filters.view === "calendar" ? ["due"] : []} />
 
       <div className={cn("transition-opacity", pending && "opacity-60")} aria-busy={pending}>
         {filters.view === "board" && (
@@ -116,7 +118,8 @@ function NewTaskButton({ filters }: { filters: TaskFilters }) {
         workspace.newTask({
           projectId: filters.project,
           assigneeId: filters.editor === "none" ? null : filters.editor,
-          status: filters.status ?? undefined,
+          // A status filter, or a stage filter's first status.
+          statusId: workspace.statuses.find((s) => s.id === filters.status || s.stage === filters.status)?.id,
           priority: filters.priority ?? undefined,
         })
       }

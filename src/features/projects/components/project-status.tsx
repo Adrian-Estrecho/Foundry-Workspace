@@ -1,8 +1,9 @@
+import { StatusDot } from "@/features/statuses/components/status-chip";
+import type { StatusBadge } from "@/features/statuses/constants";
 import { cn } from "@/lib/utils";
-import { projectStatusMeta, type ProjectStatus } from "../constants";
 
-export function ProjectStatusChip({ status, className }: { status: ProjectStatus; className?: string }) {
-  const meta = projectStatusMeta(status);
+/** The project's status: a quiet chip with the status's coloured dot. */
+export function ProjectStatusChip({ status, className }: { status: Pick<StatusBadge, "name" | "color">; className?: string }) {
   return (
     <span
       className={cn(
@@ -10,8 +11,8 @@ export function ProjectStatusChip({ status, className }: { status: ProjectStatus
         className,
       )}
     >
-      <span className={cn("size-1.5 rounded-full", meta.dot)} />
-      {meta.label}
+      <StatusDot color={status.color} className="size-1.5" />
+      <span className="truncate">{status.name}</span>
     </span>
   );
 }

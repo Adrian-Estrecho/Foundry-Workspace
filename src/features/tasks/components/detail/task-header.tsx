@@ -3,7 +3,18 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeftIcon, CheckIcon, ChevronDownIcon, Loader2Icon, MoreHorizontalIcon, PencilIcon, PlayIcon, SendIcon, Trash2Icon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  Loader2Icon,
+  MoreHorizontalIcon,
+  PencilIcon,
+  PlayIcon,
+  SendIcon,
+  Settings2Icon,
+  Trash2Icon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -13,8 +24,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
-import { TASK_STATUSES, taskStatusMeta, type TaskStatus } from "../../constants";
+import { StatusDot } from "@/features/statuses/components/status-chip";
+import type { StatusBadge } from "@/features/statuses/constants";
+import type { TaskStatus, TaskStatusDef } from "../../constants";
 import type { TaskDraft } from "../task-form-dialog";
 import { useTaskWorkspace } from "../task-workspace";
 
@@ -23,7 +35,7 @@ export function TaskHeader({
   context,
   canWork,
 }: {
-  task: Required<Omit<TaskDraft, "id">> & { id: string; isTrial: boolean };
+  task: Required<Omit<TaskDraft, "id">> & { id: string; isTrial: boolean; statusInfo: StatusBadge };
   /** Breadcrumb above the title: client and project links. */
   context: React.ReactNode;
   /** The signed-in editor is the assignee (editors only). */
@@ -32,13 +44,13 @@ export function TaskHeader({
   const router = useRouter();
   const workspace = useTaskWorkspace();
   const [pending, startTransition] = React.useTransition();
-  const current = taskStatusMeta(task.status);
-  const ref = { id: task.id, title: task.title, status: task.status };
+  const current = task.statusInfo;
+  const ref = { id: task.id, title: task.title, status: task.status, statusInfo: task.statusInfo };
   const locked = !workspace.isAdmin && task.status === "done";
 
-  const change = (status: TaskStatus) =>
+  const change = (to: TaskStatusDef | TaskStatus) =>
     startTransition(async () => {
-      await workspace.changeStatus(ref, status);
+      await workspace.changeStatus(ref, to);
     });
 
   // The one obvious next step for the editor doing the work.
@@ -78,26 +90,23 @@ export function TaskHeader({
                 size="lg"
                 className="bg-surface ring-1 ring-border"
                 disabled={pending || locked || (!workspace.isAdmin && !canWork)}
-                aria-label={`Status: ${current.label}. Change status`}
+                aria-label={`Status: ${current.name}. Change status`}
               >
-                <span className={cn("size-2.5 rounded-full", current.dot)} />
-                {current.label}
+                <StatusDot color={current.color} className="size-2.5" />
+                {current.name}
                 {!locked && <ChevronDownIcon className="text-muted-foreground" />}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-60 rounded-2xl">
+            <DropdownMenuContent align="end" className="max-h-96 w-60 overflow-y-auto rounded-2xl">
               <DropdownMenuLabel>Status</DropdownMenuLabel>
-              {TASK_STATUSES.map((status) => {
-                const allowed = workspace.allowedStatuses.includes(status.value);
+              {workspace.statuses.map((status) => {
+                const allowed = workspace.canMoveTo(status);
+                const selected = status.id === current.id;
                 return (
-                  <DropdownMenuItem
-                    key={status.value}
-                    disabled={!allowed}
-                    onSelect={() => status.value !== task.status && change(status.value)}
-                  >
-                    <span className={cn("size-2 rounded-full", status.dot)} />
-                    {status.label}
-                    {status.value === task.status ? (
+                  <DropdownMenuItem key={status.id} disabled={!allowed} onSelect={() => !selected && change(status)}>
+                    <StatusDot color={status.color} />
+                    <span className="truncate">{status.name}</span>
+                    {selected ? (
                       <CheckIcon className="ml-auto" />
                     ) : (
                       !allowed && <span className="ml-auto text-xs text-muted-foreground">Admin</span>
@@ -105,6 +114,16 @@ export function TaskHeader({
                   </DropdownMenuItem>
                 );
               })}
+              {workspace.isAdmin && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/workspace/statuses">
+                      <Settings2Icon /> Edit statuses
+                    </Link>
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
           {workspace.isAdmin && (
