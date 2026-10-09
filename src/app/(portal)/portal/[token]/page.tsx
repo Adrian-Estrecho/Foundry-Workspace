@@ -5,17 +5,16 @@ import { MessageSquareIcon } from "lucide-react";
 import { AccentStyle } from "@/components/theme/accent-style";
 import { ModeToggle } from "@/components/theme/mode-toggle";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { PORTAL_TABS, PORTAL_VIEWS, type PortalView } from "@/features/portal/constants";
+import { inPortalList, PORTAL_LISTS, PORTAL_TABS, PORTAL_VIEWS, type PortalView } from "@/features/portal/constants";
 import { PortalMessages } from "@/features/portal/components/portal-messages";
 import { PortalRefresh } from "@/features/portal/components/portal-refresh";
-import { PortalBoard, PortalCalendar, PortalList, PortalOverview } from "@/features/portal/components/portal-views";
+import { PortalBoard, PortalList } from "@/features/portal/components/portal-views";
 import { ProjectFilter } from "@/features/portal/components/project-filter";
 import { portalHref, type PortalLink } from "@/features/portal/links";
 import { getPortal } from "@/features/portal/queries";
 import { WorkspaceTile } from "@/features/workspaces/components/workspace-switcher";
 import { cn } from "@/lib/utils";
 
-const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
 
 // The link is a key: keep it out of search engines and other sites' referrer logs.
@@ -29,9 +28,9 @@ export async function generateMetadata(props: PageProps<"/portal/[token]">): Pro
 }
 
 /**
- * A client's view of the work they've given the studio: an overview, the
- * tasks as a board, a list or a calendar (optionally for one project), and
- * a private conversation with the team.
+ * A client's view of their videos: every video, the ones ready to post,
+ * posted and archived (each grouped by status), a board (optionally for one
+ * project), and a private conversation with the team.
  */
 export default async function PortalPage(props: PageProps<"/portal/[token]">) {
   await connection();
@@ -51,14 +50,14 @@ export default async function PortalPage(props: PageProps<"/portal/[token]">) {
   }
 
   const requestedView = first(search.view);
-  const view: PortalView = PORTAL_VIEWS.includes(requestedView as PortalView) ? (requestedView as PortalView) : "overview";
+  const view: PortalView = PORTAL_VIEWS.includes(requestedView as PortalView) ? (requestedView as PortalView) : "videos";
   const requestedProject = first(search.project);
   const project = portal.projects.find((p) => p.id === requestedProject) ?? null;
-  const requestedMonth = first(search.month);
-  const month = requestedMonth && MONTH.test(requestedMonth) ? requestedMonth : portal.today.slice(0, 7);
 
   const tasks = project ? portal.tasks.filter((t) => t.projectId === project.id) : portal.tasks;
-  const projects = project ? [project] : portal.projects;
+  const lists = new Map<PortalView, typeof tasks>(PORTAL_LISTS.map((list) => [list.value, tasks.filter((t) => inPortalList(list, t.statusInfo.name))]));
+  const list = PORTAL_LISTS.find((l) => l.value === view);
+  const showProject = !project && portal.projects.length > 1;
 
   const link: PortalLink = { token, projectId: project?.id ?? null };
 
@@ -80,10 +79,10 @@ export default async function PortalPage(props: PageProps<"/portal/[token]">) {
 
       <div className="mb-6">
         <h1 className="font-heading text-3xl font-semibold tracking-tight text-balance">
-          {project ? project.name : `Hi ${portal.client.contactName.split(" ")[0] || "there"}, here's where your work stands`}
+          {project ? project.name : `Hi ${portal.client.contactName.split(" ")[0] || "there"}, here are your videos`}
         </h1>
         <p className="mt-1.5 text-muted-foreground">
-          Every task {portal.workspace.name} is working on for {portal.client.name}, updated live as the team moves it along.
+          Every video {portal.workspace.name} is making for {portal.client.name}, updated live as the team moves it along.
         </p>
       </div>
 
@@ -91,6 +90,7 @@ export default async function PortalPage(props: PageProps<"/portal/[token]">) {
         <nav aria-label="Portal views" className="inline-flex max-w-full overflow-x-auto rounded-lg bg-muted p-0.5 scrollbar-none">
           {PORTAL_TABS.map((item) => {
             const active = item.value === view;
+            const count = lists.get(item.value)?.length;
             return (
               <Link
                 key={item.value}
@@ -103,6 +103,7 @@ export default async function PortalPage(props: PageProps<"/portal/[token]">) {
                 )}
               >
                 {item.label}
+                {count !== undefined && <span className="ml-1.5 text-xs text-muted-foreground tabular">{count}</span>}
               </Link>
             );
           })}
@@ -140,19 +141,8 @@ export default async function PortalPage(props: PageProps<"/portal/[token]">) {
         </div>
       </div>
 
-      {view === "overview" && (
-        <PortalOverview
-          projects={projects}
-          tasks={tasks}
-          today={portal.today}
-          renderedAt={portal.renderedAt}
-          link={link}
-          unread={portal.unread}
-        />
-      )}
-      {view === "board" && <PortalBoard tasks={tasks} statuses={portal.taskStatuses} today={portal.today} showProject={!project && portal.projects.length > 1} link={link} />}
-      {view === "list" && <PortalList tasks={tasks} statuses={portal.taskStatuses} today={portal.today} showProject={!project && portal.projects.length > 1} />}
-      {view === "calendar" && <PortalCalendar tasks={tasks} today={portal.today} month={month} link={link} />}
+      {list && <PortalList list={list.value} tasks={lists.get(list.value)!} statuses={portal.taskStatuses} today={portal.today} showProject={showProject} />}
+      {view === "board" && <PortalBoard tasks={tasks} statuses={portal.taskStatuses} today={portal.today} showProject={showProject} link={link} />}
       {view === "messages" && (
         <PortalMessages
           token={token}

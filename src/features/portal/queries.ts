@@ -1,6 +1,5 @@
 import "server-only";
 import { cache } from "react";
-import { PROJECT_STAGES } from "@/features/projects/constants";
 import type { StatusBadge, StatusColor } from "@/features/statuses/constants";
 import { taskStageLabel, type TaskStatusDef } from "@/features/tasks/constants";
 import { workspaceLogoUrl } from "@/features/workspaces/constants";
@@ -13,10 +12,10 @@ import { PORTAL_TOKEN } from "./constants";
 /**
  * A client's portal, read with the service role: the private link is the
  * only key, so every query here is scoped to that one client. Clients see
- * their projects and each task's title, status, priority, due date and
- * checklist progress, never internal notes, comments, files or who the
- * editor is. Tasks and projects show the workspace's own statuses, the same
- * ones the team sees on its boards.
+ * each video's title, status, priority, due date, checklist progress and
+ * newest edited video, never internal notes, comments, other files or who
+ * the editor is. Tasks show the workspace's own statuses, the same ones the
+ * team sees on its boards.
  */
 
 export type PortalTask = {
@@ -29,24 +28,14 @@ export type PortalTask = {
   priority: Enums<"task_priority">;
   dueDate: string | null;
   completedAt: string | null;
-  updatedAt: string;
   projectId: string;
   projectName: string;
   subtasks: { done: number; total: number };
+  /** The newest edited video (v1, v2…), for the client to watch. */
+  editedVideo: { url: string; version: number } | null;
 };
 
-export type PortalProject = {
-  id: string;
-  name: string;
-  /** The stage (Client Review asks for feedback, Delivered closes it). */
-  status: Enums<"project_status">;
-  /** The workspace status the project is in. */
-  statusInfo: StatusBadge;
-  deadline: string | null;
-  deliveredAt: string | null;
-  total: number;
-  done: number;
-};
+export type PortalProject = { id: string; name: string };
 
 export type PortalMessage = {
   id: string;
@@ -58,6 +47,8 @@ export type PortalMessage = {
 };
 
 type RawStatus = { id: string; name: string; color: string };
+
+const WEB_URL = /^https?:\/\//i;
 
 /** A status for chips; falls back to the stage if it can't be read. */
 const toBadge = (raw: RawStatus | RawStatus[] | null, fallback: string): StatusBadge => {
@@ -87,7 +78,7 @@ export const getPortal = cache(async (token: string) => {
       .maybeSingle(),
     admin
       .from("projects")
-      .select("id, name, status, deadline, delivered_at, created_at, status_info:project_statuses!projects_status_id_fkey(id, name, color)")
+      .select("id, name")
       .eq("client_id", portal.client_id)
       .order("created_at", { ascending: false }),
     admin
@@ -111,10 +102,14 @@ export const getPortal = cache(async (token: string) => {
       ? admin
           .from("tasks")
           .select(
-            "id, title, status, priority, due_date, completed_at, updated_at, project_id, subtasks(is_done), status_info:task_statuses!tasks_status_id_fkey(id, name, color)",
+            "id, title, status, priority, due_date, completed_at, project_id, subtasks(is_done), videos:task_attachments(url, version), status_info:task_statuses!tasks_status_id_fkey(id, name, color)",
           )
           .in("project_id", projectIds)
           .eq("is_trial", false)
+          // Only each task's newest edited video.
+          .not("videos.version", "is", null)
+          .order("version", { referencedTable: "videos", ascending: false })
+          .limit(1, { referencedTable: "videos" })
           .order("due_date", { nullsFirst: false })
           .limit(2000)
       : Promise.resolve({ data: [] }),
@@ -129,19 +124,23 @@ export const getPortal = cache(async (token: string) => {
   ]);
 
   const projectName = new Map((projects ?? []).map((p) => [p.id, p.name]));
-  const portalTasks: PortalTask[] = (tasks ?? []).map((t) => ({
-    id: t.id,
-    title: t.title,
-    status: t.status,
-    statusInfo: toBadge(t.status_info, taskStageLabel(t.status)),
-    priority: t.priority,
-    dueDate: t.due_date,
-    completedAt: t.completed_at,
-    updatedAt: t.updated_at,
-    projectId: t.project_id!,
-    projectName: projectName.get(t.project_id!) ?? "Project",
-    subtasks: { done: t.subtasks.filter((s) => s.is_done).length, total: t.subtasks.length },
-  }));
+  const portalTasks: PortalTask[] = (tasks ?? []).map((t) => {
+    const video = t.videos[0];
+    return {
+      id: t.id,
+      title: t.title,
+      status: t.status,
+      statusInfo: toBadge(t.status_info, taskStageLabel(t.status)),
+      priority: t.priority,
+      dueDate: t.due_date,
+      completedAt: t.completed_at,
+      projectId: t.project_id!,
+      projectName: projectName.get(t.project_id!) ?? "Project",
+      subtasks: { done: t.subtasks.filter((s) => s.is_done).length, total: t.subtasks.length },
+      // A public page: only ever link out to a web address.
+      editedVideo: video?.url && WEB_URL.test(video.url) ? { url: video.url, version: video.version ?? 1 } : null,
+    };
+  });
 
   const clientName = client.company?.trim() || client.contact_name;
   const portalMessages: PortalMessage[] = (messages ?? []).reverse().map((m) => ({
@@ -160,19 +159,7 @@ export const getPortal = cache(async (token: string) => {
     token,
     workspace: { name: workspace.name, accent: workspace.default_accent, logoUrl: workspaceLogoUrl(workspace.logo_path) },
     client: { name: clientName, contactName: client.contact_name },
-    projects: (projects ?? []).map<PortalProject>((p) => {
-      const mine = portalTasks.filter((t) => t.projectId === p.id);
-      return {
-        id: p.id,
-        name: p.name,
-        status: p.status,
-        statusInfo: toBadge(p.status_info, PROJECT_STAGES.find((s) => s.value === p.status)?.label ?? p.status),
-        deadline: p.deadline,
-        deliveredAt: p.delivered_at,
-        total: mine.length,
-        done: mine.filter((t) => t.status === "done").length,
-      };
-    }),
+    projects: (projects ?? []).map<PortalProject>((p) => ({ id: p.id, name: p.name })),
     tasks: portalTasks,
     /** The board's columns, in the order the team arranged them. */
     taskStatuses: (taskStatuses ?? []).map<TaskStatusDef>((s) => ({

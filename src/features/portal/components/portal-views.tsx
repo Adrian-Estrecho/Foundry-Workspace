@@ -1,210 +1,185 @@
 "use client";
 
-import * as React from "react";
 import Link from "next/link";
-import {
-  ArrowDownIcon,
-  ArrowUpIcon,
-  CalendarDaysIcon,
-  CheckCircle2Icon,
-  CheckSquareIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  EyeIcon,
-  ListTodoIcon,
-  LoaderIcon,
-  MessageSquareIcon,
-} from "lucide-react";
+import { CheckSquareIcon, ChevronDownIcon, ListVideoIcon, PlayIcon } from "lucide-react";
 import { EmptyState } from "@/components/shared/panel";
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { StatusChip, StatusDot } from "@/features/statuses/components/status-chip";
-import { statusColor } from "@/features/statuses/constants";
-import { monthGrid, monthLabel, shiftMonth } from "@/features/tasks/calendar";
 import { DueChip, PriorityFlag } from "@/features/tasks/components/task-bits";
 import { priorityRank, type TaskStatusDef } from "@/features/tasks/constants";
-import { formatDay, timeAgo } from "@/lib/dates";
 import { cn } from "@/lib/utils";
+import { inPortalList, PORTAL_LISTS, type PortalListView } from "../constants";
 import { portalHref, type PortalLink } from "../links";
-import type { PortalProject, PortalTask } from "../queries";
+import type { PortalTask } from "../queries";
 
-/** The status a task sits in on the board. One whose status can't be read goes to the first status of its stage. */
+/** The status a task sits in. One whose status can't be read goes to the first status of its stage. */
 const columnOf = (task: PortalTask, statuses: TaskStatusDef[]) =>
   statuses.find((s) => s.id === task.statusInfo.id)?.id ?? statuses.find((s) => s.stage === task.status)?.id;
 
-function Checklist({ subtasks }: { subtasks: PortalTask["subtasks"] }) {
+/** Soonest due first (no date last), then the most urgent. Finished work: the latest first. */
+const inOrder = (finished: boolean) => (a: PortalTask, b: PortalTask) =>
+  finished
+    ? (b.completedAt ?? "").localeCompare(a.completedAt ?? "")
+    : (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999") || priorityRank(b.priority) - priorityRank(a.priority);
+
+function Checklist({ subtasks, className }: { subtasks: PortalTask["subtasks"]; className?: string }) {
   if (subtasks.total === 0) return null;
   return (
     <span
-      className={cn("inline-flex items-center gap-1 text-xs text-muted-foreground tabular", subtasks.done === subtasks.total && "text-success")}
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground tabular",
+        subtasks.done === subtasks.total && "text-success",
+        className,
+      )}
       title={`${subtasks.done} of ${subtasks.total} steps done`}
     >
-      <CheckSquareIcon className="size-3.5" /> {subtasks.done}/{subtasks.total}
+      <CheckSquareIcon className="size-3" /> {subtasks.done}/{subtasks.total}
     </span>
   );
 }
 
-// -----------------------------------------------------------------------------
-// Overview
-// -----------------------------------------------------------------------------
-export function PortalOverview({
-  projects,
-  tasks,
-  today,
-  renderedAt,
-  link,
-  unread,
-}: {
-  projects: PortalProject[];
-  tasks: PortalTask[];
-  today: string;
-  renderedAt: number;
-  link: PortalLink;
-  unread: number;
-}) {
-  const open = tasks.filter((t) => t.status !== "done");
-  const inProgress = tasks.filter((t) => t.status === "in_progress" || t.status === "revisions").length;
-  const inReview = tasks.filter((t) => t.status === "for_review").length;
-  const done = tasks.filter((t) => t.status === "done");
-  const upcoming = open
-    .filter((t) => t.dueDate)
-    .sort((a, b) => a.dueDate!.localeCompare(b.dueDate!))
-    .slice(0, 6);
-  const finished = [...done].sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? "")).slice(0, 5);
-  const waitingOnYou = projects.filter((p) => p.status === "client_review");
-
+/** The newest edited video, one click away. It opens wherever the team shared it (Frame.io, Drive…). */
+function WatchVideo({ task, variant, className }: { task: PortalTask; variant: "card" | "row"; className?: string }) {
+  const video = task.editedVideo;
+  if (!video) return null;
   return (
-    <div className="grid gap-5">
-      {waitingOnYou.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-warning/40 bg-warning/8 p-4">
-          <EyeIcon className="size-5 text-warning" />
-          <p className="min-w-0 flex-1 text-sm">
-            <span className="font-medium">Ready for your review:</span> {waitingOnYou.map((p) => p.name).join(", ")}
-          </p>
-          <Button asChild size="sm" variant="secondary">
-            <Link href={portalHref(link, "messages")}>Send feedback</Link>
-          </Button>
-        </div>
+    <a
+      href={video.url}
+      target="_blank"
+      rel="noreferrer"
+      aria-label={`Watch ${task.title}, version ${video.version} (opens in a new tab)`}
+      title={`Watch the edited video (version ${video.version})`}
+      className={cn(
+        "flex items-center gap-1.5 text-xs font-medium text-primary transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        variant === "card"
+          ? "border-t px-2.5 py-1.5 hover:bg-primary/8 focus-visible:ring-inset"
+          : "w-fit rounded-md bg-primary/10 px-2 py-1 hover:bg-primary/15",
+        className,
       )}
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Open tasks" value={open.length} icon={ListTodoIcon} />
-        <Stat label="Being worked on" value={inProgress} icon={LoaderIcon} />
-        <Stat label="In quality check" value={inReview} icon={EyeIcon} />
-        <Stat label="Done" value={done.length} icon={CheckCircle2Icon} />
-      </div>
-
-      <section className="rounded-xl border bg-card p-5" aria-labelledby="portal-projects">
-        <h2 id="portal-projects" className="font-heading text-base font-medium">
-          Projects
-        </h2>
-        {projects.length === 0 ? (
-          <p className="mt-3 text-sm text-muted-foreground">No projects yet. They show here as soon as work is set up.</p>
-        ) : (
-          <ul className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-            {projects.map((project) => {
-              const pct = project.total ? Math.round((project.done / project.total) * 100) : 0;
-              return (
-                <li key={project.id}>
-                  <Link
-                    href={portalHref(link, "board", { project: project.id })}
-                    className="block rounded-lg bg-surface p-4 ring-1 ring-border transition-colors hover:bg-accent/50"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <p className="min-w-0 font-medium">{project.name}</p>
-                      <StatusChip status={project.statusInfo} className="max-w-[55%] shrink-0" />
-                    </div>
-                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-foreground/10" aria-label={`${pct}% of tasks done`}>
-                      <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
-                    </div>
-                    <p className="mt-2 flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
-                      <span className="tabular">
-                        {project.done} of {project.total} {project.total === 1 ? "task" : "tasks"} done
-                      </span>
-                      <span>
-                        {project.status === "delivered" && project.deliveredAt
-                          ? `Delivered ${timeAgo(project.deliveredAt, renderedAt)}`
-                          : project.deadline
-                            ? `Deadline ${formatDay(project.deadline, { month: "short", day: "numeric" })}`
-                            : "No deadline set"}
-                      </span>
-                    </p>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <section className="rounded-xl border bg-card p-5" aria-labelledby="portal-upcoming">
-          <h2 id="portal-upcoming" className="font-heading text-base font-medium">
-            Coming up
-          </h2>
-          {upcoming.length === 0 ? (
-            <p className="mt-3 text-sm text-muted-foreground">Nothing with a due date yet.</p>
-          ) : (
-            <ul className="mt-3 grid grid-cols-1 gap-2">
-              {upcoming.map((task) => (
-                <li key={task.id} className="flex items-center gap-3 rounded-lg bg-surface px-3 py-2.5 ring-1 ring-border">
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{task.title}</span>
-                    <span className="block truncate text-xs text-muted-foreground">{task.projectName}</span>
-                  </span>
-                  <StatusChip status={task.statusInfo} className="hidden sm:inline-flex" />
-                  <DueChip dueDate={task.dueDate} today={today} done={false} />
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="rounded-xl border bg-card p-5" aria-labelledby="portal-finished">
-          <div className="flex items-center justify-between gap-3">
-            <h2 id="portal-finished" className="font-heading text-base font-medium">
-              Recently finished
-            </h2>
-            <Link href={portalHref(link, "messages")} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-              <MessageSquareIcon className="size-4" />
-              Message the team
-              {unread > 0 && (
-                <span className="grid min-w-5 place-items-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
-                  {unread}
-                </span>
-              )}
-            </Link>
-          </div>
-          {finished.length === 0 ? (
-            <p className="mt-3 text-sm text-muted-foreground">Finished work shows here.</p>
-          ) : (
-            <ul className="mt-3 grid grid-cols-1 gap-2">
-              {finished.map((task) => (
-                <li key={task.id} className="flex items-center gap-3 rounded-lg bg-surface px-3 py-2.5 ring-1 ring-border">
-                  <CheckCircle2Icon className="size-4 shrink-0 text-success" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm">{task.title}</span>
-                    <span className="block truncate text-xs text-muted-foreground">{task.projectName}</span>
-                  </span>
-                  {task.completedAt && <span className="shrink-0 text-xs text-muted-foreground">{timeAgo(task.completedAt, renderedAt)}</span>}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      </div>
-    </div>
+    >
+      <PlayIcon className="size-3 shrink-0 fill-current" />
+      {variant === "card" ? "Watch video" : "Watch"}
+      <span className={cn("text-[10px] font-semibold tabular", variant === "card" ? "ml-auto rounded bg-primary/12 px-1.5" : "opacity-75")}>
+        v{video.version}
+      </span>
+    </a>
   );
 }
 
-function Stat({ label, value, icon: Icon }: { label: string; value: number; icon: React.ComponentType<{ className?: string }> }) {
-  return (
-    <div className="rounded-xl border bg-card p-4">
-      <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-sm text-muted-foreground">{label}</span>
-        <Icon className="size-4 shrink-0 text-muted-foreground" />
+// -----------------------------------------------------------------------------
+// Lists
+// -----------------------------------------------------------------------------
+const EMPTY: Record<PortalListView, { title: string; description: string }> = {
+  videos: { title: "No videos yet", description: "Videos show here as soon as the team starts on them." },
+  "ready-to-post": { title: "Nothing ready to post", description: "Finished videos show here when they're ready for you to post." },
+  posted: { title: "Nothing posted yet", description: "Videos show here once they're posted." },
+  archived: { title: "Nothing archived", description: "Archived videos show here." },
+};
+
+/**
+ * One of the portal's lists, grouped by status like the team's ClickUp lists:
+ * the furthest along first, each group with its own headings and folding away.
+ */
+export function PortalList({
+  list,
+  tasks,
+  statuses,
+  today,
+  showProject,
+}: {
+  list: PortalListView;
+  tasks: PortalTask[];
+  statuses: TaskStatusDef[];
+  today: string;
+  showProject: boolean;
+}) {
+  const groups = [...statuses]
+    .reverse()
+    .map((status) => ({
+      status,
+      tasks: tasks.filter((t) => columnOf(t, statuses) === status.id).sort(inOrder(status.stage === "done")),
+    }))
+    .filter((group) => group.tasks.length > 0);
+
+  if (groups.length === 0) {
+    return (
+      <div className="rounded-xl border bg-card">
+        <EmptyState icon={ListVideoIcon} title={EMPTY[list].title} description={EMPTY[list].description} />
       </div>
-      <div className="mt-2 font-heading text-2xl font-semibold tracking-tight tabular">{value}</div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-5">
+      {groups.map(({ status, tasks: inGroup }) => (
+        <Collapsible key={status.id} defaultOpen asChild>
+          <section aria-label={status.name}>
+            <div className="mb-2 flex items-center gap-2">
+              <CollapsibleTrigger className="group inline-flex items-center gap-1.5 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <ChevronDownIcon className="size-4 text-muted-foreground transition-transform group-data-[state=closed]:-rotate-90" />
+                <StatusChip status={status} className="rounded-md px-2 text-[11px] font-semibold tracking-wide uppercase" />
+              </CollapsibleTrigger>
+              <span className="text-sm text-muted-foreground tabular">{inGroup.length}</span>
+            </div>
+            <CollapsibleContent>
+              <div className="overflow-hidden rounded-xl border bg-card">
+                <table className="w-full table-fixed text-sm">
+                  <thead className="border-b text-left text-xs text-muted-foreground">
+                    <tr>
+                      <th scope="col" className="px-3 py-2 font-medium">
+                        Name
+                      </th>
+                      {showProject && (
+                        <th scope="col" className="hidden w-48 px-3 py-2 font-medium lg:table-cell">
+                          Project
+                        </th>
+                      )}
+                      <th scope="col" className="hidden w-28 px-3 py-2 font-medium sm:table-cell">
+                        Video
+                      </th>
+                      <th scope="col" className="w-28 px-3 py-2 font-medium">
+                        Due date
+                      </th>
+                      <th scope="col" className="hidden w-24 px-3 py-2 font-medium md:table-cell">
+                        Priority
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {inGroup.map((task) => (
+                      <tr key={task.id}>
+                        <td className="px-3 py-2.5">
+                          <span className="flex min-w-0 items-center gap-2.5">
+                            <StatusDot color={status.color} />
+                            <span className="truncate font-medium">{task.title}</span>
+                            <Checklist subtasks={task.subtasks} />
+                          </span>
+                          {showProject && <span className="mt-0.5 block truncate pl-4.5 text-xs text-muted-foreground lg:hidden">{task.projectName}</span>}
+                          <WatchVideo task={task} variant="row" className="mt-1.5 ml-4.5 sm:hidden" />
+                        </td>
+                        {showProject && <td className="hidden truncate px-3 py-2.5 text-muted-foreground lg:table-cell">{task.projectName}</td>}
+                        <td className="hidden px-3 py-2.5 sm:table-cell">
+                          {task.editedVideo ? <WatchVideo task={task} variant="row" /> : <span className="text-xs text-muted-foreground">—</span>}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {task.dueDate ? (
+                            <DueChip dueDate={task.dueDate} today={today} done={task.status === "done"} />
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="hidden px-3 py-2.5 md:table-cell">
+                          <PriorityFlag priority={task.priority} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CollapsibleContent>
+          </section>
+        </Collapsible>
+      ))}
     </div>
   );
 }
@@ -212,7 +187,7 @@ function Stat({ label, value, icon: Icon }: { label: string; value: number; icon
 // -----------------------------------------------------------------------------
 // Board
 // -----------------------------------------------------------------------------
-/** Done columns keep the most recent few; the list has the rest. */
+/** Done columns keep the most recent few; the lists have the rest. */
 const DONE_ON_BOARD = 8;
 
 /** A column per workspace status, in the order the team arranged them on their own board. */
@@ -232,56 +207,35 @@ export function PortalBoard({
   return (
     <div
       role="region"
-      aria-label="Task board"
-      className="-mx-4 flex snap-x snap-mandatory scroll-px-4 items-start gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:scroll-px-0 sm:px-0 lg:snap-none"
+      aria-label="Video board"
+      className="-mx-4 flex snap-x snap-mandatory scroll-px-4 items-start gap-2.5 overflow-x-auto px-4 pb-2 sm:mx-0 sm:scroll-px-0 sm:px-0 lg:snap-none"
     >
       {statuses.map((status) => {
         const finished = status.stage === "done";
-        const all = tasks
-          .filter((t) => columnOf(t, statuses) === status.id)
-          .sort((a, b) =>
-            finished
-              ? (b.completedAt ?? "").localeCompare(a.completedAt ?? "")
-              : (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999") || priorityRank(b.priority) - priorityRank(a.priority),
-          );
+        const all = tasks.filter((t) => columnOf(t, statuses) === status.id).sort(inOrder(finished));
         const column = finished ? all.slice(0, DONE_ON_BOARD) : all;
+        // "More" goes to the list this status belongs to (Posted…), or to every video.
+        const home = PORTAL_LISTS.find((list) => list.statuses && inPortalList(list, status.name)) ?? PORTAL_LISTS[0];
         return (
           <section
             key={status.id}
             aria-label={status.name}
-            className="flex w-[82vw] max-w-80 shrink-0 snap-start flex-col sm:w-auto sm:max-w-none sm:min-w-48 sm:flex-1 sm:basis-0"
+            className="flex w-[70vw] max-w-64 shrink-0 snap-start flex-col sm:w-auto sm:max-w-none sm:min-w-44 sm:flex-1 sm:basis-0"
           >
-            <header className="mb-2 flex items-center gap-2 px-1 text-sm">
+            <header className="mb-2 flex items-center gap-2 px-1 text-[13px]">
               <StatusDot color={status.color} />
               <span className="truncate font-medium">{status.name}</span>
               <span className="text-muted-foreground tabular">{all.length}</span>
             </header>
-            <ul className="grid grid-cols-1 content-start gap-2">
+            <ul className="grid grid-cols-1 content-start gap-1.5">
               {column.map((task) => (
-                <li key={task.id} className="rounded-xl border bg-card p-3.5">
-                  {showProject && <p className="truncate text-xs text-muted-foreground">{task.projectName}</p>}
-                  <p
-                    className={cn(
-                      "mt-0.5 line-clamp-3 leading-snug font-medium",
-                      task.status === "done" && "text-muted-foreground line-through decoration-muted-foreground/40",
-                    )}
-                  >
-                    {task.title}
-                  </p>
-                  <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-                    {task.status !== "done" && task.priority !== "medium" && task.priority !== "low" && <PriorityFlag priority={task.priority} />}
-                    <DueChip dueDate={task.dueDate} today={today} done={task.status === "done"} />
-                    <Checklist subtasks={task.subtasks} />
-                  </div>
-                </li>
+                <BoardCard key={task.id} task={task} today={today} showProject={showProject} />
               ))}
-              {column.length === 0 && (
-                <li className="rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground">Nothing here</li>
-              )}
+              {column.length === 0 && <li className="rounded-lg border border-dashed p-3 text-center text-xs text-muted-foreground">Nothing here</li>}
               {all.length > column.length && (
                 <li>
-                  <Link href={portalHref(link, "list")} className="block rounded-lg p-2 text-center text-xs text-muted-foreground hover:text-foreground">
-                    {all.length - column.length} more in the list
+                  <Link href={portalHref(link, home.value)} className="block rounded-lg p-1.5 text-center text-xs text-muted-foreground hover:text-foreground">
+                    {all.length - column.length} more in {home.label}
                   </Link>
                 </li>
               )}
@@ -293,266 +247,25 @@ export function PortalBoard({
   );
 }
 
-// -----------------------------------------------------------------------------
-// List
-// -----------------------------------------------------------------------------
-type SortKey = "title" | "project" | "status" | "due";
-
-export function PortalList({
-  tasks,
-  statuses,
-  today,
-  showProject,
-}: {
-  tasks: PortalTask[];
-  statuses: TaskStatusDef[];
-  today: string;
-  showProject: boolean;
-}) {
-  const [sort, setSort] = React.useState<{ key: SortKey; dir: 1 | -1 }>({ key: "due", dir: 1 });
-
-  const sorted = React.useMemo(() => {
-    // Statuses sort in the board's order.
-    const order = new Map(statuses.map((status, index) => [status.id, index]));
-    const statusIndex = (task: PortalTask) => order.get(columnOf(task, statuses) ?? "") ?? statuses.length;
-    const compare = (a: PortalTask, b: PortalTask) => {
-      switch (sort.key) {
-        case "title":
-          return a.title.localeCompare(b.title);
-        case "project":
-          return a.projectName.localeCompare(b.projectName);
-        case "status":
-          return statusIndex(a) - statusIndex(b);
-        case "due":
-          if (a.dueDate === b.dueDate) return 0;
-          if (!a.dueDate) return 1;
-          if (!b.dueDate) return -1;
-          return a.dueDate.localeCompare(b.dueDate);
-      }
-    };
-    return [...tasks].sort((a, b) => compare(a, b) * sort.dir);
-  }, [tasks, statuses, sort]);
-
-  if (tasks.length === 0) {
-    return (
-      <div className="rounded-xl border bg-card">
-        <EmptyState icon={ListTodoIcon} title="No tasks yet" description="Tasks show here as soon as the team plans the work." />
-      </div>
-    );
-  }
-
-  const header = (key: SortKey, label: string, className?: string) => {
-    const active = sort.key === key;
-    return (
-      <th scope="col" className={cn("px-3 py-2.5 font-medium", className)} aria-sort={active ? (sort.dir === 1 ? "ascending" : "descending") : "none"}>
-        <button
-          type="button"
-          onClick={() => setSort((s) => ({ key, dir: s.key === key ? ((-s.dir) as 1 | -1) : 1 }))}
-          className={cn("inline-flex items-center gap-1 rounded outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring", active && "text-foreground")}
-        >
-          {label}
-          {active && (sort.dir === 1 ? <ArrowUpIcon className="size-3" /> : <ArrowDownIcon className="size-3" />)}
-        </button>
-      </th>
-    );
-  };
-
+/** A small card: the title, what's due, and the edited video to watch when there is one. */
+function BoardCard({ task, today, showProject }: { task: PortalTask; today: string; showProject: boolean }) {
+  const done = task.status === "done";
+  const flagged = !done && (task.priority === "high" || task.priority === "urgent");
+  const details = flagged || task.dueDate !== null || task.subtasks.total > 0;
   return (
-    <div className="overflow-hidden rounded-xl border bg-card">
-      <table className="w-full table-fixed text-sm">
-        <thead className="border-b text-left text-xs text-muted-foreground">
-          <tr>
-            {header("title", "Task")}
-            {showProject && header("project", "Project", "hidden w-52 lg:table-cell")}
-            {header("status", "Status", "hidden w-36 md:table-cell")}
-            {header("due", "Due", "w-28 sm:w-32")}
-          </tr>
-        </thead>
-        <tbody className="divide-y">
-          {sorted.map((task) => {
-            const done = task.status === "done";
-            return (
-              <tr key={task.id}>
-                <td className="px-3 py-2.5">
-                  <span className={cn("block truncate font-medium", done && "text-muted-foreground line-through decoration-muted-foreground/40")}>
-                    {task.title}
-                  </span>
-                  <span className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className={cn("truncate", showProject && "lg:hidden")}>{showProject ? task.projectName : null}</span>
-                    <Checklist subtasks={task.subtasks} />
-                  </span>
-                  <span className="mt-1.5 block md:hidden">
-                    <StatusChip status={task.statusInfo} />
-                  </span>
-                </td>
-                {showProject && <td className="hidden truncate px-3 py-2.5 text-muted-foreground lg:table-cell">{task.projectName}</td>}
-                <td className="hidden px-3 py-2.5 md:table-cell">
-                  <StatusChip status={task.statusInfo} />
-                </td>
-                <td className="px-3 py-2.5">
-                  {task.dueDate ? <DueChip dueDate={task.dueDate} today={today} done={done} /> : <span className="text-xs text-muted-foreground">—</span>}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-// -----------------------------------------------------------------------------
-// Calendar
-// -----------------------------------------------------------------------------
-const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const VISIBLE_PER_DAY = 3;
-
-export function PortalCalendar({
-  tasks,
-  today,
-  month,
-  link,
-}: {
-  tasks: PortalTask[];
-  today: string;
-  month: string;
-  link: PortalLink;
-}) {
-  const grid = monthGrid(month);
-  const byDay = new Map<string, PortalTask[]>();
-  for (const task of tasks) {
-    if (!task.dueDate || task.dueDate < grid.start || task.dueDate > grid.end) continue;
-    byDay.set(task.dueDate, [...(byDay.get(task.dueDate) ?? []), task]);
-  }
-  const monthDays = grid.days.filter((day) => day >= grid.first && day <= grid.last);
-  const agendaDays = monthDays.filter((day) => byDay.has(day));
-
-  return (
-    <section aria-label={`Calendar, ${monthLabel(month)}`}>
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <h2 className="mr-auto font-heading text-lg font-medium">{monthLabel(month)}</h2>
-        <Button asChild variant="outline" size="sm">
-          <Link href={portalHref(link, "calendar", { month: today.slice(0, 7) })} scroll={false}>
-            Today
-          </Link>
-        </Button>
-        <Button asChild variant="outline" size="icon-sm">
-          <Link href={portalHref(link, "calendar", { month: shiftMonth(month, -1) })} scroll={false} aria-label="Previous month">
-            <ChevronLeftIcon />
-          </Link>
-        </Button>
-        <Button asChild variant="outline" size="icon-sm">
-          <Link href={portalHref(link, "calendar", { month: shiftMonth(month, 1) })} scroll={false} aria-label="Next month">
-            <ChevronRightIcon />
-          </Link>
-        </Button>
-      </div>
-
-      <div className="hidden overflow-hidden rounded-xl border bg-card md:block">
-        <div className="grid grid-cols-7 border-b text-xs text-muted-foreground">
-          {WEEKDAYS.map((day) => (
-            <div key={day} className="px-2 py-2 font-medium">
-              {day}
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 [&>*:nth-child(7n)]:border-r-0">
-          {grid.days.map((day) => {
-            const list = byDay.get(day) ?? [];
-            const inMonth = day >= grid.first && day <= grid.last;
-            const hidden = list.length - VISIBLE_PER_DAY;
-            return (
-              <div key={day} className={cn("flex min-h-28 min-w-0 flex-col gap-1 border-r border-b p-1.5", !inMonth && "bg-surface")}>
-                <span
-                  className={cn(
-                    "grid size-6 place-items-center rounded-full text-xs tabular",
-                    day === today && "bg-primary font-semibold text-primary-foreground",
-                    !inMonth && day !== today && "text-muted-foreground/60",
-                  )}
-                >
-                  {Number(day.slice(8))}
-                </span>
-                {list.slice(0, VISIBLE_PER_DAY).map((task) => (
-                  <CalendarChip key={task.id} task={task} today={today} />
-                ))}
-                {hidden > 0 && (
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <button type="button" className="rounded px-1.5 text-left text-xs text-muted-foreground hover:text-foreground">
-                        +{hidden} more
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent align="start" className="w-72 p-2">
-                      <p className="px-1.5 pb-1.5 text-xs font-medium text-muted-foreground">
-                        {formatDay(day, { weekday: "long", month: "long", day: "numeric" })}
-                      </p>
-                      <ul className="grid grid-cols-1 gap-1">
-                        {list.map((task) => (
-                          <li key={task.id} className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-sm">
-                            <span className="min-w-0 flex-1 truncate">{task.title}</span>
-                            <StatusChip status={task.statusInfo} />
-                          </li>
-                        ))}
-                      </ul>
-                    </PopoverContent>
-                  </Popover>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="md:hidden">
-        {agendaDays.length === 0 ? (
-          <div className="rounded-xl border bg-card">
-            <EmptyState icon={CalendarDaysIcon} title="Nothing due this month" description="Tasks with a due date show up here." />
+    <li className="overflow-hidden rounded-lg border bg-card">
+      <div className="px-2.5 py-2">
+        {showProject && <p className="truncate text-[11px] text-muted-foreground">{task.projectName}</p>}
+        <p className="line-clamp-2 text-[13px] leading-snug font-medium">{task.title}</p>
+        {details && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+            {flagged && <PriorityFlag priority={task.priority} className="text-[11px]" />}
+            <DueChip dueDate={task.dueDate} today={today} done={done} className="text-[11px]" />
+            <Checklist subtasks={task.subtasks} className="text-[11px]" />
           </div>
-        ) : (
-          <ol className="grid grid-cols-1 gap-4">
-            {agendaDays.map((day) => (
-              <li key={day}>
-                <p className={cn("mb-1.5 px-1 text-sm font-medium", day === today && "text-primary")}>
-                  {formatDay(day, { weekday: "long", month: "short", day: "numeric" })}
-                  {day === today && " · Today"}
-                </p>
-                <ul className="grid grid-cols-1 gap-1.5">
-                  {byDay.get(day)!.map((task) => (
-                    <li key={task.id} className="flex items-center gap-3 rounded-lg bg-card px-3 py-2.5 ring-1 ring-border">
-                      <span className="min-w-0 flex-1">
-                        <span className={cn("block truncate text-sm font-medium", task.status === "done" && "text-muted-foreground line-through")}>
-                          {task.title}
-                        </span>
-                        <span className="block truncate text-xs text-muted-foreground">{task.projectName}</span>
-                      </span>
-                      <StatusChip status={task.statusInfo} />
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ol>
         )}
       </div>
-    </section>
-  );
-}
-
-function CalendarChip({ task, today }: { task: PortalTask; today: string }) {
-  const done = task.status === "done";
-  const overdue = !done && task.dueDate !== null && task.dueDate < today;
-  const color = statusColor(task.statusInfo.color);
-  return (
-    <span
-      className={cn(
-        "flex min-w-0 items-center gap-1.5 rounded-md bg-surface px-1.5 py-1 text-xs ring-1 ring-border",
-        overdue && "text-danger ring-danger/30",
-        done && "text-muted-foreground",
-      )}
-      title={`${task.title} · ${task.statusInfo.name} · ${task.projectName}`}
-    >
-      <span className={cn("size-1.5 shrink-0 rounded-full", color.dot)} />
-      <span className={cn("truncate", done && "line-through decoration-muted-foreground/40")}>{task.title}</span>
-    </span>
+      <WatchVideo task={task} variant="card" />
+    </li>
   );
 }
