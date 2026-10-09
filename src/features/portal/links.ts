@@ -1,10 +1,13 @@
 /** Where the portal's views live. `project` narrows to one project (not on Messages). */
 export type PortalLink = { token: string; projectId: string | null };
 
-export function portalHref(link: PortalLink, view: string) {
+export function portalHref(link: PortalLink, view: string, extra: { project?: string; month?: string; status?: string } = {}) {
   const params = new URLSearchParams();
-  if (view !== "videos") params.set("view", view);
-  if (link.projectId && view !== "messages") params.set("project", link.projectId);
+  if (view !== "overview") params.set("view", view);
+  const projectId = extra.project ?? link.projectId;
+  if (projectId && view !== "messages") params.set("project", projectId);
+  if (extra.month) params.set("month", extra.month);
+  if (extra.status) params.set("status", extra.status);
   const query = params.toString();
   return `/portal/${link.token}${query ? `?${query}` : ""}`;
 }
