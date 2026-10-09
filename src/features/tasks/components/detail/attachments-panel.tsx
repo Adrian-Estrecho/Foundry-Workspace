@@ -8,6 +8,7 @@ import { FormRow, submitWith } from "@/components/shared/form";
 import { EmptyState, Panel } from "@/components/shared/panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ClickUpMark } from "@/features/clickup/components/clickup-mark";
 import { timeAgo } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/client";
 import { addTaskLink, recordTaskFile, removeAttachment } from "../../actions";
@@ -21,6 +22,8 @@ export type Attachment = {
   addedBy: string | null;
   addedByName: string | null;
   createdAt: string;
+  /** Sent to ClickUp (a file as an attachment, a link as a comment). */
+  inClickUp: boolean;
 };
 
 const hostOf = (url: string) => {
@@ -32,8 +35,10 @@ const hostOf = (url: string) => {
 };
 
 /**
- * Review links (Frame.io, Drive) and files. Files go straight from the
- * browser to private storage and open through short-lived links.
+ * Reference links and files. Files go straight from the browser to private
+ * storage and open through short-lived links. On a task synced with
+ * ClickUp, what's added here goes there too: files as attachments, links as
+ * comments.
  */
 export function AttachmentsPanel({
   taskId,
@@ -41,6 +46,7 @@ export function AttachmentsPanel({
   canAdd,
   currentUserId,
   canRemoveAny,
+  synced,
   renderedAt,
 }: {
   taskId: string;
@@ -49,6 +55,8 @@ export function AttachmentsPanel({
   currentUserId: string;
   /** Remove anyone's files, not just their own. */
   canRemoveAny: boolean;
+  /** Synced with ClickUp. */
+  synced: boolean;
   renderedAt: number;
 }) {
   const router = useRouter();
@@ -65,7 +73,7 @@ export function AttachmentsPanel({
         setErrors(result.fieldErrors ?? {});
         return void toast.error(result.error);
       }
-      toast.success("Link added");
+      toast.success("Link added", { description: synced ? "It's posted in ClickUp as a comment." : undefined });
       setErrors({});
       setAdding(false);
       router.refresh();
@@ -84,7 +92,7 @@ export function AttachmentsPanel({
       if (error) throw new Error(error.message);
       const result = await recordTaskFile(taskId, path, file.name);
       if (!result.ok) throw new Error(result.error);
-      toast.success("File uploaded", { description: file.name });
+      toast.success("File uploaded", { description: synced ? `${file.name} is going to ClickUp too.` : file.name });
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Upload failed.");
@@ -98,13 +106,18 @@ export function AttachmentsPanel({
     startTransition(async () => {
       const result = await removeAttachment(attachment.id);
       if (!result.ok) return void toast.error(result.error);
-      toast.success(attachment.kind === "file" ? "File removed" : "Link removed");
+      if (result.data?.keptInClickUp) {
+        toast.success("File removed here", { description: "ClickUp doesn't let apps remove attachments, so remove it there too." });
+      } else {
+        toast.success(attachment.kind === "file" ? "File removed" : "Link removed");
+      }
       router.refresh();
     });
 
   return (
     <Panel
       title="Links & files"
+      description={synced ? "What you add here also goes to ClickUp." : undefined}
       action={
         canAdd && (
           <div className="flex gap-1.5">
@@ -128,10 +141,10 @@ export function AttachmentsPanel({
       {adding && (
         <form onSubmit={submitWith(saveLink)} className="mb-4 grid gap-3 rounded-xl border border-dashed p-3 sm:grid-cols-[1fr_12rem_auto] sm:items-end">
           <FormRow label="Link" error={errors.url}>
-            <Input name="url" type="url" placeholder="https://app.frame.io/…" autoFocus required aria-invalid={!!errors.url} className="h-9" />
+            <Input name="url" type="url" placeholder="https://drive.google.com/…" autoFocus required aria-invalid={!!errors.url} className="h-9" />
           </FormRow>
           <FormRow label="Label" error={errors.label}>
-            <Input name="label" placeholder="e.g. Review v2" maxLength={120} className="h-9" />
+            <Input name="label" placeholder="e.g. Raw footage" maxLength={120} className="h-9" />
           </FormRow>
           <Button type="submit" disabled={pending}>
             {pending ? <Loader2Icon className="animate-spin" /> : <PlusIcon />} Add
@@ -143,7 +156,7 @@ export function AttachmentsPanel({
         <EmptyState
           icon={PaperclipIcon}
           title="Nothing attached yet"
-          description={canAdd ? "Add the Frame.io review link or upload a file." : undefined}
+          description={canAdd ? "Footage, scripts, music: links or files the edit needs." : undefined}
         />
       ) : (
         <ul className="grid grid-cols-1 gap-2">
@@ -164,9 +177,12 @@ export function AttachmentsPanel({
                   ) : (
                     <span className="block truncate text-sm font-medium">{title}</span>
                   )}
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {attachment.kind === "link" && attachment.href ? `${hostOf(attachment.href)} · ` : ""}
-                    {attachment.addedByName ?? "Someone"} · {timeAgo(attachment.createdAt, renderedAt)}
+                  <span className="flex items-center gap-1 truncate text-xs text-muted-foreground">
+                    <span className="truncate">
+                      {attachment.kind === "link" && attachment.href ? `${hostOf(attachment.href)} · ` : ""}
+                      {attachment.addedByName ?? "Someone"} · {timeAgo(attachment.createdAt, renderedAt)}
+                    </span>
+                    {attachment.inClickUp && <ClickUpMark className="size-3" title="Also in ClickUp" />}
                   </span>
                 </span>
                 {attachment.href && (

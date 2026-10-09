@@ -323,6 +323,29 @@ export type Database = {
           },
         ];
       };
+      clickup_comment_syncs: {
+        Row: {
+          synced_at: string;
+          task_id: string;
+        };
+        Insert: {
+          synced_at?: string;
+          task_id: string;
+        };
+        Update: {
+          synced_at?: string;
+          task_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "clickup_comment_syncs_task_id_fkey";
+            columns: ["task_id"];
+            isOneToOne: true;
+            referencedRelation: "tasks";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       clickup_connections: {
         Row: {
           account_email: string | null;
@@ -378,6 +401,71 @@ export type Database = {
             foreignKeyName: "clickup_connections_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: true;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      clickup_item_outbox: {
+        Row: {
+          attachment_id: string | null;
+          attempts: number;
+          comment_id: string | null;
+          id: string;
+          last_error: string | null;
+          next_attempt_at: string;
+          queued_at: string;
+          task_id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          attachment_id?: string | null;
+          attempts?: number;
+          comment_id?: string | null;
+          id?: string;
+          last_error?: string | null;
+          next_attempt_at?: string;
+          queued_at?: string;
+          task_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          attachment_id?: string | null;
+          attempts?: number;
+          comment_id?: string | null;
+          id?: string;
+          last_error?: string | null;
+          next_attempt_at?: string;
+          queued_at?: string;
+          task_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "clickup_item_outbox_attachment_id_fkey";
+            columns: ["attachment_id"];
+            isOneToOne: true;
+            referencedRelation: "task_attachments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "clickup_item_outbox_comment_id_fkey";
+            columns: ["comment_id"];
+            isOneToOne: true;
+            referencedRelation: "task_comments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "clickup_item_outbox_task_id_fkey";
+            columns: ["task_id"];
+            isOneToOne: false;
+            referencedRelation: "tasks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "clickup_item_outbox_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
             referencedRelation: "workspaces";
             referencedColumns: ["id"];
           },
@@ -2161,6 +2249,7 @@ export type Database = {
       task_attachments: {
         Row: {
           added_by: string | null;
+          clickup_id: string | null;
           created_at: string;
           id: string;
           kind: string;
@@ -2168,10 +2257,12 @@ export type Database = {
           storage_path: string | null;
           task_id: string;
           url: string | null;
+          version: number | null;
           workspace_id: string;
         };
         Insert: {
           added_by?: string | null;
+          clickup_id?: string | null;
           created_at?: string;
           id?: string;
           kind: string;
@@ -2179,10 +2270,12 @@ export type Database = {
           storage_path?: string | null;
           task_id: string;
           url?: string | null;
+          version?: number | null;
           workspace_id?: string;
         };
         Update: {
           added_by?: string | null;
+          clickup_id?: string | null;
           created_at?: string;
           id?: string;
           kind?: string;
@@ -2190,6 +2283,7 @@ export type Database = {
           storage_path?: string | null;
           task_id?: string;
           url?: string | null;
+          version?: number | null;
           workspace_id?: string;
         };
         Relationships: [
@@ -2218,32 +2312,44 @@ export type Database = {
       };
       task_comments: {
         Row: {
-          author_id: string;
+          author_id: string | null;
           body: string;
+          clickup_author: string | null;
+          clickup_author_avatar: string | null;
+          clickup_comment_id: string | null;
           created_at: string;
           edited_at: string | null;
           id: string;
           mentions: string[];
+          source: string;
           task_id: string;
           workspace_id: string;
         };
         Insert: {
-          author_id: string;
+          author_id?: string | null;
           body: string;
+          clickup_author?: string | null;
+          clickup_author_avatar?: string | null;
+          clickup_comment_id?: string | null;
           created_at?: string;
           edited_at?: string | null;
           id?: string;
           mentions?: string[];
+          source?: string;
           task_id: string;
           workspace_id?: string;
         };
         Update: {
-          author_id?: string;
+          author_id?: string | null;
           body?: string;
+          clickup_author?: string | null;
+          clickup_author_avatar?: string | null;
+          clickup_comment_id?: string | null;
           created_at?: string;
           edited_at?: string | null;
           id?: string;
           mentions?: string[];
+          source?: string;
           task_id?: string;
           workspace_id?: string;
         };
@@ -2831,6 +2937,27 @@ export type Database = {
       };
       can_manage_task: { Args: { p_task_id: string }; Returns: boolean };
       can_see_profile: { Args: { p_user_id: string }; Returns: boolean };
+      claim_clickup_items: {
+        Args: { p_limit?: number };
+        Returns: {
+          attachment_author: string;
+          attachment_id: string;
+          attachment_kind: string;
+          attachment_label: string;
+          attachment_path: string;
+          attachment_url: string;
+          attachment_version: number;
+          attempts: number;
+          clickup_task_id: string;
+          comment_author: string;
+          comment_body: string;
+          comment_id: string;
+          id: string;
+          task_id: string;
+          task_title: string;
+          workspace_id: string;
+        }[];
+      };
       claim_notification_emails: {
         Args: { p_limit?: number };
         Returns: {
@@ -3004,7 +3131,7 @@ export type Database = {
         Returns: {
           accepting_applications: boolean;
           default_accent: string;
-          logo_path: string | null;
+          logo_path: string;
           name: string;
           workspace_id: string;
         }[];

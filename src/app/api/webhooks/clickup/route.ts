@@ -1,6 +1,14 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
-import { errorMessage, handleWebhook, loadConnection, loadSyncContext, recordError, type WebhookPayload } from "@/features/clickup/sync";
+import {
+  ensureWebhookEvents,
+  errorMessage,
+  handleWebhook,
+  loadConnection,
+  loadSyncContext,
+  recordError,
+  type WebhookPayload,
+} from "@/features/clickup/sync";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -14,6 +22,9 @@ function signedBy(body: string, signature: string | null, secret: string) {
   const given = Buffer.from(signature.trim().toLowerCase());
   return given.length === expected.length && timingSafeEqual(given, expected);
 }
+
+/** Webhooks this server has checked for the events the sync now listens to. */
+const checkedWebhooks = new Set<string>();
 
 export async function POST(request: Request) {
   const body = await request.text();
@@ -44,6 +55,14 @@ export async function POST(request: Request) {
     const clickup = await loadConnection(admin, workspaceId);
     if (!clickup) return new NextResponse("Gone", { status: 410 });
     await handleWebhook(await loadSyncContext(admin, clickup), payload);
+    // A webhook made before comments were synced starts sending them.
+    if (!checkedWebhooks.has(payload.webhook_id)) {
+      checkedWebhooks.add(payload.webhook_id);
+      await ensureWebhookEvents(clickup, payload.webhook_id).catch((error) => {
+        checkedWebhooks.delete(payload.webhook_id!);
+        console.error("[clickup] couldn't update the webhook's events:", errorMessage(error));
+      });
+    }
     await admin.from("clickup_connections").update({ last_event_at: new Date().toISOString() }).eq("workspace_id", workspaceId);
     return NextResponse.json({ ok: true });
   } catch (error) {

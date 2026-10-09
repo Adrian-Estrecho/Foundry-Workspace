@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRightIcon, ExternalLinkIcon, MoreHorizontalIcon, PlusIcon, Trash2Icon, UserRoundIcon } from "lucide-react";
+import { ArrowRightIcon, ExternalLinkIcon, MoreHorizontalIcon, PlayIcon, PlusIcon, Trash2Icon, UserRoundIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -48,6 +48,14 @@ export function TaskMenu({ task, className }: { task: TaskSummary; className?: s
             <ExternalLinkIcon /> Open task
           </Link>
         </DropdownMenuItem>
+        {task.editedVideo && (
+          <DropdownMenuItem asChild>
+            <a href={task.editedVideo.url} target="_blank" rel="noreferrer">
+              <PlayIcon /> Edited video
+              <span className="ml-auto text-xs font-semibold text-primary tabular">v{task.editedVideo.version}</span>
+            </a>
+          </DropdownMenuItem>
+        )}
         {task.clickupUrl && (
           <DropdownMenuItem asChild>
             <a href={task.clickupUrl} target="_blank" rel="noreferrer">

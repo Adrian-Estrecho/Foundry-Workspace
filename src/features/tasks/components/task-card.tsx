@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CheckSquareIcon, GraduationCapIcon, MessageSquareIcon, PaperclipIcon, RotateCcwIcon } from "lucide-react";
+import { CheckSquareIcon, ExternalLinkIcon, GraduationCapIcon, MessageSquareIcon, PaperclipIcon, PlayIcon, RotateCcwIcon } from "lucide-react";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { ClickUpMark } from "@/features/clickup/components/clickup-mark";
 import { cn } from "@/lib/utils";
@@ -97,7 +97,33 @@ export function TaskCard({
           </span>
         </div>
       </Link>
+      {task.editedVideo && <EditedVideoLink video={task.editedVideo} />}
       {menu && <div className="absolute top-2 right-2">{menu}</div>}
     </div>
+  );
+}
+
+/** The newest edited video, one click from the board. Outside the card's link, so the two don't nest. */
+export function EditedVideoLink({ video, className }: { video: NonNullable<TaskSummary["editedVideo"]>; className?: string }) {
+  return (
+    <a
+      href={video.url}
+      target="_blank"
+      rel="noreferrer"
+      draggable={false}
+      onPointerDown={(event) => event.stopPropagation()}
+      className={cn(
+        "flex items-center gap-2 rounded-b-xl border-t px-3.5 py-2 text-xs font-medium text-muted-foreground transition-colors outline-none hover:bg-primary/8 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+        className,
+      )}
+      title={`Open the edited video (version ${video.version})`}
+    >
+      <span className="grid size-5 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground">
+        <PlayIcon className="size-3 fill-current" />
+      </span>
+      Edited video
+      <span className="rounded-md bg-primary/12 px-1.5 py-px text-[11px] font-semibold text-primary tabular">v{video.version}</span>
+      <ExternalLinkIcon className="ml-auto size-3.5" />
+    </a>
   );
 }

@@ -130,7 +130,7 @@ async function loadComments(admin: Admin, notifications: ClaimedNotification[]) 
 
   const { data } = await admin
     .from("task_comments")
-    .select("task_id, author_id, body, mentions, created_at, author:profiles(full_name)")
+    .select("task_id, author_id, clickup_author, body, mentions, created_at, author:profiles(full_name)")
     .in("task_id", [...new Set(wanted.map((n) => n.entity_id!))])
     .order("created_at", { ascending: false })
     .limit(wanted.length * 10);
@@ -144,7 +144,7 @@ async function loadComments(admin: Admin, notifications: ClaimedNotification[]) 
         (n.type === "mention" ? c.mentions.includes(n.user_id) : c.author_id !== n.user_id),
     );
     if (comment && (n.type === "mention" || Date.parse(n.created_at) - Date.parse(comment.created_at) < 5 * 60_000)) {
-      comments.set(n.id, { author: one(comment.author)?.full_name ?? "Someone", body: comment.body, at: comment.created_at });
+      comments.set(n.id, { author: one(comment.author)?.full_name ?? comment.clickup_author ?? "Someone", body: comment.body, at: comment.created_at });
     }
   }
   return comments;

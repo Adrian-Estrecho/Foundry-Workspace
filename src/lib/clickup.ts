@@ -41,9 +41,33 @@ export type ClickUpTaskUpdate = {
 export type ClickUpWebhook = {
   id: string;
   endpoint: string;
+  events?: string[];
   secret?: string;
   health?: { status: string; fail_count: number };
 };
+/**
+ * A part of a comment: text, an @mention (`type: "tag"`), a pasted link
+ * (`bookmark`), an image or a file. `comment_text` drops the links' https://.
+ */
+export type ClickUpCommentPart = {
+  type?: string;
+  text?: string;
+  user?: ClickUpUser;
+  bookmark?: { url?: string };
+  image?: { url?: string };
+  attachment?: { url?: string; title?: string };
+};
+/** A task comment. Dates are epoch ms. */
+export type ClickUpComment = {
+  id: string;
+  comment_text: string;
+  comment?: ClickUpCommentPart[];
+  user: ClickUpUser & { profilePicture?: string | null };
+  date: string;
+  reply_count?: string | number | null;
+};
+/** One page of a task's comments, newest first. */
+export const COMMENT_PAGE_SIZE = 25;
 
 export class ClickUpError extends Error {
   constructor(
@@ -65,6 +89,8 @@ export const WEBHOOK_EVENTS = [
   "taskDueDateUpdated",
   "taskPriorityUpdated",
   "taskMoved",
+  "taskCommentPosted",
+  "taskCommentUpdated",
   "listUpdated",
 ];
 
@@ -78,10 +104,12 @@ export function clickup(token: string) {
     const url = new URL(API + path);
     for (const [key, value] of Object.entries(query ?? {})) if (value !== undefined) url.searchParams.set(key, String(value));
 
+    // Files go as multipart, which fetch labels itself.
+    const form = body instanceof FormData;
     const response = await fetch(url, {
       method,
-      headers: { Authorization: token, ...(body !== undefined && { "Content-Type": "application/json" }) },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      headers: { Authorization: token, ...(body !== undefined && !form && { "Content-Type": "application/json" }) },
+      body: form ? body : body !== undefined ? JSON.stringify(body) : undefined,
       cache: "no-store",
     });
 
@@ -126,6 +154,25 @@ export function clickup(token: string) {
       }),
     task: (taskId: string) => request<ClickUpTask>("GET", `/task/${taskId}`),
     updateTask: (taskId: string, changes: ClickUpTaskUpdate) => request<ClickUpTask>("PUT", `/task/${taskId}`, undefined, changes),
+    /** A page of a task's comments, newest first; pass the last one's date and id for the next page. */
+    taskComments: (taskId: string, after?: { date: string; id: string }) =>
+      request<{ comments: ClickUpComment[] }>("GET", `/task/${taskId}/comment`, after && { start: after.date, start_id: after.id }).then(
+        (r) => r.comments,
+      ),
+    commentReplies: (commentId: string) =>
+      request<{ comments: ClickUpComment[] }>("GET", `/comment/${commentId}/reply`).then((r) => r.comments),
+    /** Posts as the token's owner, without notifying them. */
+    createComment: (taskId: string, text: string) =>
+      request<{ id: string | number; date: number }>("POST", `/task/${taskId}/comment`, undefined, {
+        comment_text: text,
+        notify_all: false,
+      }),
+    deleteComment: (commentId: string) => request<unknown>("DELETE", `/comment/${commentId}`),
+    uploadAttachment: (taskId: string, file: Blob, name: string) => {
+      const form = new FormData();
+      form.append("attachment", file, name);
+      return request<{ id: string; url: string }>("POST", `/task/${taskId}/attachment`, undefined, form);
+    },
     /** People with access to the List itself (not through its Folder, Space or workspace). */
     listMembers: (listId: string) => request<{ members: ClickUpUser[] }>("GET", `/list/${listId}/member`).then((r) => r.members),
     createWebhook: (teamId: string, endpoint: string) =>
@@ -135,6 +182,9 @@ export function clickup(token: string) {
       }),
     webhooks: (teamId: string) =>
       request<{ webhooks: ClickUpWebhook[] }>("GET", `/team/${teamId}/webhook`).then((r) => r.webhooks),
+    /** Sets the events a webhook sends (and turns it back on). */
+    updateWebhook: (webhook: Pick<ClickUpWebhook, "id" | "endpoint">, events: string[]) =>
+      request<unknown>("PUT", `/webhook/${webhook.id}`, undefined, { endpoint: webhook.endpoint, events, status: "active" }),
     deleteWebhook: (webhookId: string) => request<unknown>("DELETE", `/webhook/${webhookId}`),
   };
 }

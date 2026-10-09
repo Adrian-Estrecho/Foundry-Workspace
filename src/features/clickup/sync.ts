@@ -4,11 +4,15 @@ import type { TaskPriority, TaskStatus } from "@/features/tasks/constants";
 import {
   clickup,
   ClickUpError,
+  COMMENT_PAGE_SIZE,
+  WEBHOOK_EVENTS,
   type ClickUpClient,
+  type ClickUpComment,
   type ClickUpStatus,
   type ClickUpTask,
   type ClickUpTaskUpdate,
   type ClickUpUser,
+  type ClickUpWebhook,
 } from "@/lib/clickup";
 import { isTimeZone } from "@/lib/action-result";
 import { momentIn, todayIn } from "@/lib/dates";
@@ -497,6 +501,7 @@ export async function importPipeline(ctx: SyncContext, pipeline: Pipeline, { ini
     }
   }
 
+  await catchUpComments(ctx.admin, ctx.connection, pipeline.project_id);
   await ctx.admin.from("clickup_pipelines").update({ last_synced_at: new Date().toISOString() }).eq("id", pipeline.id);
   return counts;
 }
@@ -517,6 +522,17 @@ export async function handleWebhook(ctx: SyncContext, payload: WebhookPayload) {
     return;
   }
   if (!payload.task_id) return;
+
+  if (payload.event === "taskCommentPosted" || payload.event === "taskCommentUpdated") {
+    const { data: task } = await admin
+      .from("tasks")
+      .select("id, workspace_id, clickup_task_id")
+      .eq("workspace_id", ctx.connection.workspaceId)
+      .eq("clickup_task_id", payload.task_id)
+      .maybeSingle();
+    if (task) await syncComments(admin, ctx.connection, { ...task, clickup_task_id: payload.task_id });
+    return;
+  }
 
   const removeLinked = async () => {
     const { data } = await admin
@@ -688,4 +704,373 @@ export async function pushQueuedChanges(admin: Admin) {
     }
   }
   return { pushed, waiting: changes.length - pushed };
+}
+
+// -----------------------------------------------------------------------------
+// ClickUp → ReEdit: comments
+// -----------------------------------------------------------------------------
+/** Up to 500 comments a task. */
+const COMMENT_PAGES = 20;
+/** An editor's "Edited: <link>" in ClickUp is the task's next edited video. */
+const EDITED_VIDEO = /^\s*(edited|revised|v\d+)\b/i;
+const FIRST_LINK = /https?:\/\/[^\s<>"']+/;
+/** Mentions in older comments were seen in ClickUp already: bringing them in doesn't notify. */
+const FRESH_MENTION_MS = 10 * 60_000;
+/** How long a task's comments count as current when it's opened. */
+const COMMENTS_CURRENT_MS = 60_000;
+
+export type CommentTask = { id: string; workspace_id: string; clickup_task_id: string };
+
+/** A comment as written: pasted links in full (comment_text drops their https://), mentions as @Name. */
+export function commentBody(comment: ClickUpComment) {
+  const text = comment.comment?.length
+    ? comment.comment
+        .map((part) => part.bookmark?.url ?? part.image?.url ?? part.attachment?.url ?? part.text ?? (part.user ? `@${part.user.username}` : ""))
+        .join("")
+    : comment.comment_text;
+  return text
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/** A task's comments, replies included. `complete` is false when there were more than are read. */
+async function fetchComments(api: ClickUpClient, taskId: string) {
+  const comments = new Map<string, ClickUpComment>();
+  let complete = false;
+  let last: ClickUpComment | undefined;
+  for (let page = 0; page < COMMENT_PAGES; page++) {
+    const batch = await api.taskComments(taskId, last && { date: last.date, id: last.id });
+    for (const comment of batch) comments.set(comment.id, comment);
+    last = batch.at(-1);
+    if (batch.length < COMMENT_PAGE_SIZE || !last) {
+      complete = true;
+      break;
+    }
+  }
+  for (const thread of [...comments.values()].filter((c) => Number(c.reply_count) > 0)) {
+    for (const reply of await api.commentReplies(thread.id)) comments.set(reply.id, reply);
+  }
+  return { comments: [...comments.values()].sort((a, b) => Number(a.date) - Number(b.date)), complete };
+}
+
+/** The workspace's members by email (lower case), for matching ClickUp's comment writers. */
+async function membersByEmail(admin: Admin, workspaceId: string) {
+  const { data } = await admin
+    .from("workspace_members")
+    .select("user_id, role, profile:profiles!workspace_members_user_id_fkey(email)")
+    .eq("workspace_id", workspaceId);
+  return new Map(
+    (data ?? []).flatMap((m) =>
+      m.profile?.email ? [[m.profile.email.toLowerCase(), { id: m.user_id, admin: m.role === "owner" || m.role === "admin" }] as const] : [],
+    ),
+  );
+}
+
+/**
+ * Brings a synced task's ClickUp comments in: new ones are added, edited
+ * ones updated, and ones deleted in ClickUp removed. A comment's writer is
+ * the member with their email, or their ClickUp name. Comments and links
+ * that went from here to ClickUp aren't brought back. A new "Edited: <link>"
+ * from someone who isn't an admin also becomes the task's next edited video.
+ * Returns whether anything changed.
+ */
+export async function syncComments(admin: Admin, connection: Connection, task: CommentTask) {
+  const { comments, complete } = await fetchComments(connection.api, task.clickup_task_id);
+  const [{ data: local, error }, { data: sent }, members] = await Promise.all([
+    admin.from("task_comments").select("id, source, body, clickup_comment_id").eq("task_id", task.id).not("clickup_comment_id", "is", null),
+    admin.from("task_attachments").select("clickup_id").eq("task_id", task.id).not("clickup_id", "is", null),
+    membersByEmail(admin, task.workspace_id),
+  ]);
+  if (error) throw error;
+  const known = new Map((local ?? []).map((c) => [c.clickup_comment_id!, c]));
+  // Links posted from here become ClickUp comments: they're attachments here.
+  const echoes = new Set((sent ?? []).map((a) => a.clickup_id!));
+  const memberFor = (user: ClickUpUser | undefined) => members.get(user?.email?.toLowerCase() ?? "");
+  let changed = false;
+
+  const rows: TablesInsert<"task_comments">[] = [];
+  const videos = new Map<string, TablesInsert<"task_attachments">>();
+  for (const comment of comments) {
+    if (echoes.has(comment.id)) continue;
+    const body = commentBody(comment).slice(0, 8000) || "Sent an attachment in ClickUp.";
+    const existing = known.get(comment.id);
+    if (existing) {
+      if (existing.source === "clickup" && existing.body !== body) {
+        await admin.from("task_comments").update({ body, edited_at: new Date().toISOString() }).eq("id", existing.id);
+        changed = true;
+      }
+      continue;
+    }
+
+    const author = memberFor(comment.user);
+    const at = Number(comment.date);
+    const createdAt = new Date(Number.isFinite(at) ? at : Date.now()).toISOString();
+    const mentions =
+      Date.now() - at < FRESH_MENTION_MS
+        ? [...new Set((comment.comment ?? []).flatMap((part) => (part.type === "tag" ? [memberFor(part.user)?.id ?? ""] : [])))].filter(Boolean)
+        : [];
+    rows.push({
+      workspace_id: task.workspace_id,
+      task_id: task.id,
+      author_id: author?.id ?? null,
+      body,
+      mentions,
+      created_at: createdAt,
+      source: "clickup",
+      clickup_comment_id: comment.id,
+      clickup_author: comment.user?.username || comment.user?.email || "ClickUp user",
+      clickup_author_avatar: comment.user?.profilePicture ?? null,
+    });
+    const link = EDITED_VIDEO.test(body) && !author?.admin ? FIRST_LINK.exec(body)?.[0] : undefined;
+    if (link) {
+      videos.set(comment.id, {
+        task_id: task.id,
+        kind: "link",
+        url: link.slice(0, 500),
+        version: 1,
+        added_by: author?.id ?? null,
+        created_at: createdAt,
+      });
+    }
+  }
+
+  if (rows.length) {
+    // Only what this run added: another one may be bringing the same comments in.
+    const { data: added, error: insertError } = await admin
+      .from("task_comments")
+      .upsert(rows, { onConflict: "workspace_id,clickup_comment_id", ignoreDuplicates: true })
+      .select("clickup_comment_id");
+    if (insertError) throw insertError;
+    changed ||= (added ?? []).length > 0;
+    // Oldest first, so the versions follow ClickUp's order.
+    for (const { clickup_comment_id } of added ?? []) {
+      const video = videos.get(clickup_comment_id!);
+      if (video) await admin.from("task_attachments").insert(video);
+    }
+  }
+
+  // Deleted in ClickUp, and links from here that the webhook brought in before the push recorded them.
+  const ids = new Set(comments.map((c) => c.id));
+  const gone = (local ?? [])
+    .filter((c) => c.source === "clickup" && ((complete && !ids.has(c.clickup_comment_id!)) || echoes.has(c.clickup_comment_id!)))
+    .map((c) => c.id);
+  if (gone.length) {
+    await admin.from("task_comments").delete().in("id", gone);
+    changed = true;
+  }
+
+  await admin.from("clickup_comment_syncs").upsert({ task_id: task.id, synced_at: new Date().toISOString() });
+  return changed;
+}
+
+/**
+ * Reads a synced task's ClickUp comments unless that was done in the last
+ * minute (the webhook keeps them current; this catches up on what came
+ * before it). Returns whether anything changed.
+ */
+export async function refreshTaskComments(admin: Admin, taskId: string) {
+  const { data: task } = await admin
+    .from("tasks")
+    .select("id, workspace_id, clickup_task_id, synced:clickup_comment_syncs(synced_at)")
+    .eq("id", taskId)
+    .maybeSingle();
+  if (!task?.clickup_task_id) return false;
+  const syncedAt = Array.isArray(task.synced) ? task.synced[0]?.synced_at : task.synced?.synced_at;
+  if (syncedAt && Date.now() - Date.parse(syncedAt) < COMMENTS_CURRENT_MS) return false;
+
+  const connection = await loadConnection(admin, task.workspace_id);
+  if (!connection) return false;
+  return syncComments(admin, connection, { id: task.id, workspace_id: task.workspace_id, clickup_task_id: task.clickup_task_id });
+}
+
+/**
+ * After a pipeline sync: reads the comments of its tasks not read in the
+ * last 10 minutes, a few at a time, so cards show edited videos sent in
+ * ClickUp before the webhook. Stops early if ClickUp says to slow down;
+ * opening a task catches up on the rest.
+ */
+async function catchUpComments(admin: Admin, connection: Connection, projectId: string) {
+  const { data } = await admin
+    .from("tasks")
+    .select("id, workspace_id, clickup_task_id, synced:clickup_comment_syncs(synced_at)")
+    .eq("project_id", projectId)
+    .not("clickup_task_id", "is", null);
+  const since = Date.now() - 10 * 60_000;
+  const queue = (data ?? []).filter((task) => {
+    const syncedAt = Array.isArray(task.synced) ? task.synced[0]?.synced_at : task.synced?.synced_at;
+    return !syncedAt || Date.parse(syncedAt) < since;
+  });
+
+  let stopped = false;
+  const worker = async () => {
+    for (let task = queue.shift(); task && !stopped; task = queue.shift()) {
+      try {
+        await syncComments(admin, connection, { id: task.id, workspace_id: task.workspace_id, clickup_task_id: task.clickup_task_id! });
+      } catch (error) {
+        if (error instanceof ClickUpError && error.status === 429) stopped = true;
+        else console.error("[clickup] couldn't read comments:", task.clickup_task_id, errorMessage(error));
+      }
+    }
+  };
+  await Promise.all([worker(), worker(), worker(), worker()]);
+}
+
+/**
+ * Webhooks made before comments were synced don't send comment events:
+ * adds them. Returns false when ClickUp no longer has the webhook.
+ */
+export async function ensureWebhookEvents(connection: Connection, webhookId: string, known?: ClickUpWebhook) {
+  const webhook = known ?? (await connection.api.webhooks(connection.teamId)).find((w) => w.id === webhookId);
+  if (!webhook) return false;
+  const events = webhook.events ?? [];
+  if (!events.includes("*") && WEBHOOK_EVENTS.some((event) => !events.includes(event))) {
+    await connection.api.updateWebhook(webhook, WEBHOOK_EVENTS);
+  }
+  return true;
+}
+
+// -----------------------------------------------------------------------------
+// ReEdit → ClickUp: comments, links and files
+// -----------------------------------------------------------------------------
+/** A row of claim_clickup_items: a comment or an attachment, as it is now (nulls when it's been removed). */
+type QueuedItem = {
+  id: string;
+  workspace_id: string;
+  task_id: string;
+  attempts: number;
+  clickup_task_id: string | null;
+  task_title: string;
+  comment_id: string | null;
+  comment_body: string | null;
+  comment_author: string | null;
+  attachment_id: string | null;
+  attachment_kind: "link" | "file" | null;
+  attachment_url: string | null;
+  attachment_path: string | null;
+  attachment_label: string | null;
+  attachment_version: number | null;
+  attachment_author: string | null;
+};
+
+/** A comment from here, as it reads in ClickUp (posted from the connected account). */
+export const commentForClickUp = (author: string | null, body: string) => `${author ?? "Someone"}: ${body}`;
+
+/** A link from here, as the ClickUp comment it's posted as. */
+export function linkForClickUp(link: { author: string | null; url: string; label: string | null; version: number | null }) {
+  const who = link.author ?? "Someone";
+  if (link.version) return `${who} sent the edited video (v${link.version}): ${link.url}${link.label ? `\n${link.label}` : ""}`;
+  return `${who} added a link: ${link.label ? `${link.label} – ` : ""}${link.url}`;
+}
+
+/**
+ * Sends one item. Once ClickUp has it, recording what it became there can't
+ * fail the item, or a retry would post it twice.
+ */
+async function sendItem(admin: Admin, connection: Connection, item: QueuedItem & { clickup_task_id: string }) {
+  const record = async (write: () => PromiseLike<{ error: { message: string } | null }>) => {
+    const { error } = await write();
+    if (error) console.error("[clickup] sent, but couldn't record it:", item.id, error.message);
+  };
+  // The webhook can bring a just-posted comment in before it's recorded as ours.
+  const dropEcho = (clickupId: string) =>
+    record(() =>
+      admin.from("task_comments").delete().match({ workspace_id: item.workspace_id, clickup_comment_id: clickupId, source: "clickup" }),
+    );
+
+  if (item.comment_id) {
+    if (item.comment_body === null) return;
+    const created = await connection.api.createComment(item.clickup_task_id, commentForClickUp(item.comment_author, item.comment_body));
+    const clickupId = String(created.id);
+    await dropEcho(clickupId);
+    await record(() => admin.from("task_comments").update({ clickup_comment_id: clickupId }).eq("id", item.comment_id!));
+    return;
+  }
+
+  if (!item.attachment_kind) return;
+  if (item.attachment_kind === "link") {
+    if (!item.attachment_url) return;
+    const created = await connection.api.createComment(
+      item.clickup_task_id,
+      linkForClickUp({ author: item.attachment_author, url: item.attachment_url, label: item.attachment_label, version: item.attachment_version }),
+    );
+    const clickupId = String(created.id);
+    await record(() => admin.from("task_attachments").update({ clickup_id: clickupId }).eq("id", item.attachment_id!));
+    await dropEcho(clickupId);
+    return;
+  }
+
+  if (!item.attachment_path) return;
+  const { data: file, error } = await admin.storage.from("task-files").download(item.attachment_path);
+  if (error || !file) throw new Error(`The file couldn't be read. ${error?.message ?? ""}`.trim());
+  const name = item.attachment_label || item.attachment_path.split("/").pop()!.replace(/^\d+-/, "");
+  const uploaded = await connection.api.uploadAttachment(item.clickup_task_id, file, name);
+  await record(() => admin.from("task_attachments").update({ clickup_id: String(uploaded.id) }).eq("id", item.attachment_id!));
+}
+
+/**
+ * Sends waiting comments, links and files to ClickUp until `deadline`
+ * (epoch ms); what's left goes in the next run. A failed item is retried
+ * with a growing wait, and after 8 tries it's dropped and the error shows on
+ * the ClickUp page.
+ */
+export async function pushQueuedItems(admin: Admin, deadline: number) {
+  const { data, error } = await admin.rpc("claim_clickup_items", { p_limit: 20 });
+  if (error) throw error;
+  const items = (data ?? []) as QueuedItem[];
+  const connections = new Map<string, Connection | null>();
+  let pushed = 0;
+
+  for (const [index, item] of items.entries()) {
+    if (Date.now() > deadline) {
+      const rest = items.slice(index).map((i) => i.id);
+      await admin.from("clickup_item_outbox").update({ next_attempt_at: new Date().toISOString() }).in("id", rest);
+      break;
+    }
+    const done = () => admin.from("clickup_item_outbox").delete().eq("id", item.id);
+    if (!connections.has(item.workspace_id)) connections.set(item.workspace_id, await loadConnection(admin, item.workspace_id));
+    const connection = connections.get(item.workspace_id);
+    const taskId = item.clickup_task_id;
+    if (!connection || !taskId) {
+      await done();
+      continue;
+    }
+
+    try {
+      await sendItem(admin, connection, { ...item, clickup_task_id: taskId });
+      await done();
+      pushed++;
+    } catch (pushError) {
+      const attempts = item.attempts + 1;
+      const what = item.comment_id ? "A comment" : item.attachment_kind === "file" ? "A file" : "A link";
+      const message = `${what} on ${item.task_title} couldn't be sent to ClickUp. ${errorMessage(pushError)}`;
+      if (attempts >= MAX_ATTEMPTS || (pushError instanceof ClickUpError && pushError.status === 404)) {
+        await done();
+        await recordError(admin, item.workspace_id, message);
+      } else {
+        await admin
+          .from("clickup_item_outbox")
+          .update({ attempts, last_error: message, next_attempt_at: new Date(Date.now() + attempts * attempts * 60_000).toISOString() })
+          .eq("id", item.id);
+      }
+    }
+  }
+  return { pushed, waiting: items.length - pushed };
+}
+
+/**
+ * Removes from ClickUp the comment a comment or link from here became.
+ * Best effort: the item is already gone here. ClickUp's API can't remove
+ * attachments, so files stay there.
+ */
+export async function deleteClickUpComment(admin: Admin, workspaceId: string, clickupCommentId: string) {
+  const connection = await loadConnection(admin, workspaceId);
+  if (!connection) return;
+  try {
+    await connection.api.deleteComment(clickupCommentId);
+  } catch (error) {
+    if (!(error instanceof ClickUpError && error.status === 404)) {
+      console.error("[clickup] couldn't delete a comment:", clickupCommentId, errorMessage(error));
+    }
+  }
 }

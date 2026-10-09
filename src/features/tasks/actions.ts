@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { clickupAssigneeProblem } from "@/features/clickup/sync";
+import { clickupAssigneeProblem, deleteClickUpComment, errorMessage, refreshTaskComments } from "@/features/clickup/sync";
 import { workspaceAdmins } from "@/features/workspaces/queries";
 import { blankToNull, fail, fieldErrorsOf, optionalText, type ActionResult } from "@/lib/action-result";
 import { requirePermission, requireUser } from "@/lib/auth";
@@ -265,6 +265,25 @@ export async function rescheduleTask(id: string, dueDate: string | null): Promis
   return { ok: true };
 }
 
+export async function setTaskPriority(id: string, priority: string): Promise<ActionResult> {
+  await requirePermission("tasks.manage", "editors.manage");
+  const parsed = z.object({ id: idSchema, priority: prioritySchema }).safeParse({ id, priority });
+  if (!parsed.success) return fail("Pick a priority.");
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("tasks")
+    .update({ priority: parsed.data.priority })
+    .eq("id", id)
+    .select("project_id")
+    .maybeSingle();
+  if (error) return fail(dbError(error));
+  if (!data) return fail("That task no longer exists.");
+
+  revalidateTask(id, data.project_id);
+  return { ok: true };
+}
+
 export async function setTaskProgress(id: string, progress: number): Promise<ActionResult> {
   await requireUser();
   const parsed = z.object({ id: idSchema, progress: z.number().int().min(0).max(100) }).safeParse({ id, progress });
@@ -363,6 +382,31 @@ export async function addTaskLink(taskId: string, formData: FormData): Promise<A
 }
 
 /**
+ * The edited video for review: a link that becomes the task's next version
+ * (v1, v2, …; the database numbers it). Cards show the newest.
+ */
+export async function addEditedVideo(taskId: string, formData: FormData): Promise<ActionResult<{ version: number }>> {
+  const user = await requireUser();
+  if (!idSchema.safeParse(taskId).success) return fail("Invalid task.");
+  const parsed = linkSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return fail("Please check the link.", fieldErrorsOf(parsed.error));
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("task_attachments")
+    .insert({ task_id: taskId, kind: "link", url: parsed.data.url, label: parsed.data.label, version: 1, added_by: user.id })
+    .select("version")
+    .single();
+  if (error) {
+    if (error.code === "23505") return fail("Someone sent a version at the same moment. Try again.");
+    return fail(error.code === "42501" ? "You can't change this task." : dbError(error));
+  }
+
+  revalidateTask(taskId);
+  return { ok: true, data: { version: data.version ?? 1 } };
+}
+
+/**
  * Records a file the browser already uploaded to task-files/<task_id>/…
  * (uploads go straight to storage so large exports skip the server).
  */
@@ -386,8 +430,13 @@ export async function recordTaskFile(taskId: string, path: string, fileName: str
   return { ok: true };
 }
 
-export async function removeAttachment(id: string): Promise<ActionResult> {
-  await requireUser();
+/**
+ * Removes a link or file. A link sent to ClickUp (as a comment) goes from
+ * there too; ClickUp's API can't remove attachments, so a file sent there
+ * stays (`keptInClickUp`).
+ */
+export async function removeAttachment(id: string): Promise<ActionResult<{ keptInClickUp: boolean }>> {
+  const user = await requireUser();
   if (!idSchema.safeParse(id).success) return fail("Invalid attachment.");
 
   const supabase = await createClient();
@@ -395,14 +444,15 @@ export async function removeAttachment(id: string): Promise<ActionResult> {
     .from("task_attachments")
     .delete()
     .eq("id", id)
-    .select("task_id, kind, storage_path")
+    .select("task_id, kind, storage_path, clickup_id")
     .maybeSingle();
   if (error) return fail(dbError(error));
   if (!data) return fail("You can only remove links and files you added.");
   if (data.kind === "file" && data.storage_path) await supabase.storage.from("task-files").remove([data.storage_path]);
+  if (data.kind === "link" && data.clickup_id) await deleteClickUpComment(createAdminClient(), user.workspace.id, data.clickup_id);
 
   revalidateTask(data.task_id);
-  return { ok: true };
+  return { ok: true, data: { keptInClickUp: data.kind === "file" && Boolean(data.clickup_id) } };
 }
 
 // -----------------------------------------------------------------------------
@@ -445,15 +495,39 @@ export async function addComment(taskId: string, body: string): Promise<ActionRe
   return { ok: true };
 }
 
+/** Deletes a comment, here and in ClickUp when it's there too. */
 export async function deleteComment(id: string): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
   if (!idSchema.safeParse(id).success) return fail("Invalid comment.");
 
   const supabase = await createClient();
-  const { data, error } = await supabase.from("task_comments").delete().eq("id", id).select("task_id").maybeSingle();
+  const { data, error } = await supabase.from("task_comments").delete().eq("id", id).select("task_id, clickup_comment_id").maybeSingle();
   if (error) return fail(dbError(error));
   if (!data) return fail("You can only delete your own comments.");
+  if (data.clickup_comment_id) await deleteClickUpComment(createAdminClient(), user.workspace.id, data.clickup_comment_id);
 
   revalidateTask(data.task_id);
   return { ok: true };
+}
+
+/**
+ * Catches a synced task's comments up with ClickUp when it's opened (at
+ * most once a minute; the webhook keeps them current after that). Anyone
+ * who can open the task may ask.
+ */
+export async function refreshClickUpComments(taskId: string): Promise<ActionResult<{ changed: boolean }>> {
+  await requireUser();
+  if (!idSchema.safeParse(taskId).success) return fail("Invalid task.");
+
+  const supabase = await createClient();
+  const { data: task } = await supabase.from("tasks").select("id, clickup_task_id").eq("id", taskId).maybeSingle();
+  if (!task?.clickup_task_id) return { ok: true, data: { changed: false } };
+
+  try {
+    const changed = await refreshTaskComments(createAdminClient(), task.id);
+    if (changed) revalidateTask(task.id);
+    return { ok: true, data: { changed } };
+  } catch (error) {
+    return fail(`Couldn't read the comments from ClickUp. ${errorMessage(error)}`);
+  }
 }

@@ -38,6 +38,8 @@ export type TaskSummary = {
   attachments: number;
   /** Set when the task is synced from ClickUp, which owns what the task is. */
   clickupUrl: string | null;
+  /** The newest edited video sent for review. */
+  editedVideo: { url: string; version: number } | null;
 };
 
 /** `clickup`: the project is fed by a ClickUp List, so its tasks are added there. */
@@ -51,7 +53,17 @@ const TASK_FIELDS = `id, title, status, priority, due_date, position, progress_p
   subtasks(is_done),
   comments:task_comments(count),
   attachments:task_attachments(count),
+  videos:task_attachments(url, version),
   status_info:task_statuses!tasks_status_id_fkey(id, name, color)`;
+
+/** Tasks with TASK_FIELDS, each with only its newest edited video. */
+const selectTasks = (supabase: Awaited<ReturnType<typeof createClient>>) =>
+  supabase
+    .from("tasks")
+    .select(TASK_FIELDS)
+    .not("videos.version", "is", null)
+    .order("version", { referencedTable: "videos", ascending: false })
+    .limit(1, { referencedTable: "videos" });
 
 const NO_MATCH = "00000000-0000-0000-0000-000000000000";
 
@@ -88,6 +100,7 @@ type TaskRow = {
   subtasks: { is_done: boolean }[];
   comments: { count: number }[];
   attachments: { count: number }[];
+  videos: { url: string | null; version: number | null }[];
   status_info: RawStatus | RawStatus[] | null;
 };
 
@@ -124,6 +137,7 @@ async function toSummaries(rows: TaskRow[]): Promise<TaskSummary[]> {
     comments: row.comments[0]?.count ?? 0,
     attachments: row.attachments[0]?.count ?? 0,
     clickupUrl: row.clickup_task_id ? clickupTaskUrl(row.clickup_task_id) : null,
+    editedVideo: row.videos[0]?.url ? { url: row.videos[0].url, version: row.videos[0].version ?? 1 } : null,
   }));
 }
 
@@ -181,7 +195,7 @@ export async function getTasksPage(user: CurrentUser, filters: TaskFilters) {
     clientProjectIds = (data ?? []).map((p) => p.id);
   }
 
-  let query = supabase.from("tasks").select(TASK_FIELDS).order("position").limit(1000);
+  let query = selectTasks(supabase).order("position").limit(1000);
 
   if (filters.editor === "none") query = query.is("assignee_id", null);
   else if (filters.editor) query = query.eq("assignee_id", filters.editor);
@@ -234,9 +248,7 @@ export async function getMyTasks(user: CurrentUser) {
   const supabase = await createClient();
   const since = new Date(Date.now() - RECENT_DONE_DAYS * 86_400_000).toISOString();
   const [{ data, error }, statuses] = await Promise.all([
-    supabase
-      .from("tasks")
-      .select(TASK_FIELDS)
+    selectTasks(supabase)
       .eq("assignee_id", user.id)
       .or(`status.neq.done,completed_at.gte."${since}"`)
       .order("position")
@@ -250,7 +262,7 @@ export async function getMyTasks(user: CurrentUser) {
 /** Tasks in one project (editors get only their own, through RLS). */
 export async function getProjectTasks(projectId: string) {
   const supabase = await createClient();
-  const { data, error } = await supabase.from("tasks").select(TASK_FIELDS).eq("project_id", projectId).order("position");
+  const { data, error } = await selectTasks(supabase).eq("project_id", projectId).order("position");
   if (error) throw error;
   return toSummaries(data ?? []);
 }
@@ -290,7 +302,7 @@ export async function getTaskDetail(id: string, user: CurrentUser) {
           .select("id, summary, created_at, actor:profiles(full_name, avatar_url)")
           .eq("entity_id", id)
           .order("created_at", { ascending: false })
-          .limit(12)
+          .limit(40)
       : Promise.resolve({ data: [] }),
     access.manage ? getTaskFormOptions() : Promise.resolve(null),
     getTaskStatuses(),
@@ -314,9 +326,13 @@ export async function getTaskDetail(id: string, user: CurrentUser) {
           addedBy: a.added_by,
           addedByName: a.adder?.full_name ?? null,
           createdAt: a.created_at,
+          version: a.version,
+          inClickUp: Boolean(a.clickup_id),
         };
       }),
   );
+  // Edited videos, newest first, apart from the other links and files.
+  const videos = attachments.filter((a) => a.version !== null).sort((a, b) => b.version! - a.version!);
 
   const assignee: Person | null = task.assignee
     ? { id: task.assignee.id, name: task.assignee.profile?.full_name ?? "Editor", avatarUrl: task.assignee.profile?.avatar_url ?? null }
@@ -349,7 +365,8 @@ export async function getTaskDetail(id: string, user: CurrentUser) {
     client: task.project ? { id: task.project.client_id, name: clients.get(task.project.client_id) ?? "Client" } : null,
     creatorName: task.creator?.full_name ?? null,
     subtasks: [...task.subtasks].sort((a, b) => a.position - b.position),
-    attachments,
+    attachments: attachments.filter((a) => a.version === null),
+    videos,
     comments: [...task.comments]
       .sort((a, b) => a.created_at.localeCompare(b.created_at))
       .map((c) => ({
@@ -357,7 +374,12 @@ export async function getTaskDetail(id: string, user: CurrentUser) {
         body: c.body,
         createdAt: c.created_at,
         mentions: c.mentions,
-        author: c.author ? { id: c.author.id, name: c.author.full_name, avatarUrl: c.author.avatar_url, isAdmin: adminIds.has(c.author.id) } : null,
+        author: c.author
+          ? { id: c.author.id, name: c.author.full_name, avatarUrl: c.author.avatar_url, isAdmin: adminIds.has(c.author.id) }
+          : null,
+        fromClickUp: c.source === "clickup",
+        clickupAuthor: c.clickup_author ? { name: c.clickup_author, avatarUrl: c.clickup_author_avatar } : null,
+        inClickUp: Boolean(c.clickup_comment_id),
       })),
     people,
     time: (time.data ?? [])

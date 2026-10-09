@@ -3,7 +3,7 @@ import type { StatusBadge, StatusColor } from "@/features/statuses/constants";
 import type { TaskStatus } from "@/features/tasks/constants";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { errorMessage, loadConnection, type ListStatus } from "./sync";
+import { ensureWebhookEvents, errorMessage, loadConnection, type ListStatus } from "./sync";
 
 /** Whether ClickUp is sending changes: registered and healthy, failing, or not set up (no public address yet). */
 export type LiveUpdates = { state: "on" | "failing" | "off"; detail: string | null };
@@ -59,6 +59,9 @@ export async function getClickUpPage(workspaceId: string) {
       if (!webhook) live = { state: "failing", detail: "ClickUp no longer has the webhook. Connect again to restore it." };
       else if (webhook.health && webhook.health.status !== "active") {
         live = { state: "failing", detail: `ClickUp marked it ${webhook.health.status} after ${webhook.health.fail_count} failed calls.` };
+      } else if (clickup) {
+        // One made before comments were synced starts sending them.
+        await ensureWebhookEvents(clickup, webhook.id, webhook);
       }
     } catch (error) {
       live = { state: "on", detail: `Couldn't check with ClickUp: ${errorMessage(error)}` };
