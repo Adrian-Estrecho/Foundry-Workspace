@@ -14,6 +14,7 @@ import { SopsStep } from "@/features/editors/components/onboarding/sops-step";
 import { StepCard } from "@/features/editors/components/onboarding/step-card";
 import { TrialStep } from "@/features/editors/components/onboarding/trial-step";
 import { onboardingSteps } from "@/features/editors/onboarding-steps";
+import { workspaceLogoUrl } from "@/features/workspaces/constants";
 import { getOnboarding } from "@/features/editors/queries";
 import { isOnboarding, requireUser } from "@/lib/auth";
 import { todayIn } from "@/lib/dates";
@@ -139,7 +140,11 @@ export default async function OnboardingPage() {
                   : `How we work at ${workspace}. ${sopsLeft} left to read.`
             }
           >
-            <SopsStep sops={data.sops} renderedAt={data.renderedAt} />
+            <SopsStep
+              sops={data.sops}
+              workspace={{ name: workspace, logoUrl: workspaceLogoUrl(user.workspace.logo_path) }}
+              renderedAt={data.renderedAt}
+            />
           </StepCard>
 
           <StepCard

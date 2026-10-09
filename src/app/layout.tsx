@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist_Mono, Outfit } from "next/font/google";
+import { Geist_Mono, Literata, Outfit } from "next/font/google";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -8,6 +8,8 @@ import "./globals.css";
 
 const outfit = Outfit({ variable: "--font-outfit", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+// The book serif of SOP pages; only downloaded where one is shown.
+const literata = Literata({ variable: "--font-literata", subsets: ["latin"], style: ["normal", "italic"], preload: false });
 
 export const metadata: Metadata = {
   title: { default: "ReEdit", template: "%s · ReEdit" },
@@ -25,7 +27,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     // `dark` is the default; the init script corrects it before first paint.
-    <html lang="en" className={`${outfit.variable} ${geistMono.variable} dark`} suppressHydrationWarning>
+    <html lang="en" className={`${outfit.variable} ${geistMono.variable} ${literata.variable} dark`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>

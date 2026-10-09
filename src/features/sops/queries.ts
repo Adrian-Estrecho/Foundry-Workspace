@@ -11,7 +11,7 @@ export async function getSopAdminList() {
   const [{ data: sops }, { data: editors }] = await Promise.all([
     supabase
       .from("sops")
-      .select("id, title, category, is_required, is_published, updated_at, acknowledgments:sop_acknowledgments(editor_id)")
+      .select("id, title, category, content, is_required, is_published, updated_at, acknowledgments:sop_acknowledgments(editor_id)")
       .order("is_required", { ascending: false })
       .order("title"),
     supabase
@@ -26,6 +26,7 @@ export async function getSopAdminList() {
       id: sop.id,
       title: sop.title,
       category: sop.category,
+      content: sop.content,
       required: sop.is_required,
       published: sop.is_published,
       updatedAt: sop.updated_at,
@@ -52,7 +53,7 @@ export async function getSopLibrary(user: CurrentUser) {
   const supabase = await createClient();
   const { data } = await supabase
     .from("sops")
-    .select("id, title, category, content, is_required, acknowledgments:sop_acknowledgments(editor_id, acknowledged_at)")
+    .select("id, title, category, content, is_required, updated_at, acknowledgments:sop_acknowledgments(editor_id, acknowledged_at)")
     .eq("is_published", true)
     .order("is_required", { ascending: false })
     .order("title");
@@ -64,6 +65,7 @@ export async function getSopLibrary(user: CurrentUser) {
     category: sop.category,
     content: sop.content,
     required: sop.is_required,
+    updatedAt: sop.updated_at,
     acknowledgedAt: user.role === "editor" ? (sop.acknowledgments.find((a) => a.editor_id === user.id)?.acknowledged_at ?? null) : null,
   }));
   return { sops, renderedAt: Date.now() };

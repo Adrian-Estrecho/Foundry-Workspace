@@ -5,10 +5,9 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { BookOpenIcon, CheckCircle2Icon, CheckIcon, Loader2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import type { SopWorkspace } from "@/features/sops/components/sop-document";
+import { SopReader } from "@/features/sops/components/sop-reader";
 import { SOP_CATEGORY_LABEL } from "@/features/sops/constants";
-import { SopContent } from "@/features/sops/components/sop-content";
 import { timeAgo } from "@/lib/dates";
 import type { Enums, Json } from "@/types/database";
 import { acknowledgeSop } from "../../onboarding-actions";
@@ -21,6 +20,7 @@ type Sop = {
   acknowledgedAt: string | null;
   /** Shown as a tag in the SOP library (everything in onboarding is required). */
   required?: boolean;
+  updatedAt?: string;
 };
 
 /**
@@ -29,11 +29,13 @@ type Sop = {
  */
 export function SopsStep({
   sops,
+  workspace,
   renderedAt,
   canAcknowledge = true,
   emptyText = "There are no required SOPs right now.",
 }: {
   sops: Sop[];
+  workspace: SopWorkspace;
   renderedAt: number;
   canAcknowledge?: boolean;
   emptyText?: string;
@@ -95,30 +97,23 @@ export function SopsStep({
         ))}
       </ul>
 
-      <Dialog open={!!open} onOpenChange={(value) => !value && setOpenId(null)}>
-        {open && (
-          <DialogContent className="sm:max-w-2xl">
-            <DialogHeader>
-              <DialogTitle className="text-xl">{open.title}</DialogTitle>
-              <DialogDescription>{SOP_CATEGORY_LABEL[open.category]}</DialogDescription>
-            </DialogHeader>
-            <ScrollArea className="max-h-[55vh] pr-3">
-              <SopContent content={open.content} />
-            </ScrollArea>
-            <DialogFooter>
-              {open.acknowledgedAt || !canAcknowledge ? (
-                <Button variant="ghost" onClick={() => setOpenId(null)}>
-                  Close
-                </Button>
-              ) : (
-                <Button onClick={() => acknowledge(open)} disabled={pending}>
-                  {pending ? <Loader2Icon className="animate-spin" /> : <CheckIcon />} I&apos;ve read and understood this
-                </Button>
-              )}
-            </DialogFooter>
-          </DialogContent>
-        )}
-      </Dialog>
+      <SopReader
+        sop={open}
+        workspace={workspace}
+        onClose={() => setOpenId(null)}
+        status={open?.acknowledgedAt ? `Read ${timeAgo(open.acknowledgedAt, renderedAt)}` : undefined}
+        actions={
+          open && (open.acknowledgedAt || !canAcknowledge) ? (
+            <Button variant="ghost" onClick={() => setOpenId(null)}>
+              Close
+            </Button>
+          ) : (
+            <Button onClick={() => open && acknowledge(open)} disabled={pending}>
+              {pending ? <Loader2Icon className="animate-spin" /> : <CheckIcon />} I&apos;ve read and understood this
+            </Button>
+          )
+        }
+      />
     </>
   );
 }

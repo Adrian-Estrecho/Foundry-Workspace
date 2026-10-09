@@ -3,16 +3,20 @@
 import * as React from "react";
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import { TaskItem, TaskList } from "@tiptap/extension-list";
 import {
   BoldIcon,
   CodeIcon,
+  FootprintsIcon,
   Heading2Icon,
   Heading3Icon,
   ItalicIcon,
   LinkIcon,
+  ListChecksIcon,
   ListIcon,
   ListOrderedIcon,
   MinusIcon,
+  PlusIcon,
   QuoteIcon,
   Redo2Icon,
   StrikethroughIcon,
@@ -25,22 +29,37 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { Json } from "@/types/database";
+import { InsertMenu, markPlaced } from "./sop-elements";
+import { Callout, LineHint, Step, Steps } from "./sop-nodes";
 
 /**
- * Rich text for SOPs: headings, lists, quotes, code and links. Saves the
- * document as JSON through a hidden input named `name`, which SopContent
- * renders for readers.
+ * Rich text for SOPs: headings, lists, quotes, code and links, plus the SOP
+ * blocks (step by step, checklists and callout boxes). The document is
+ * Tiptap JSON, which SopContent renders for readers.
  */
-export function RichTextEditor({ name, initial, label }: { name: string; initial: Json | null; label: string }) {
-  const [value, setValue] = React.useState(() => JSON.stringify(initial ?? { type: "doc", content: [] }));
 
-  const editor = useEditor({
+/** The SOP editor. Read the document with `editor.getJSON()` when saving. */
+export function useSopEditor({ initial, label }: { initial: Json | null; label: string }) {
+  return useEditor({
     immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         heading: { levels: [2, 3] },
         link: { openOnClick: false, autolink: true, defaultProtocol: "https", protocols: ["http", "https", "mailto"] },
+        listKeymap: {
+          listTypes: [
+            { itemName: "listItem", wrapperNames: ["bulletList", "orderedList"] },
+            { itemName: "taskItem", wrapperNames: ["taskList"] },
+            { itemName: "step", wrapperNames: ["steps"] },
+          ],
+        },
       }),
+      TaskList,
+      TaskItem,
+      Steps,
+      Step,
+      Callout,
+      LineHint,
     ],
     content: (initial as object | null) ?? "",
     editorProps: {
@@ -48,23 +67,18 @@ export function RichTextEditor({ name, initial, label }: { name: string; initial
         "aria-label": label,
         "aria-multiline": "true",
         role: "textbox",
-        class: cn(
-          "min-h-80 px-4 py-3 text-sm leading-relaxed outline-none",
-          "[&_p]:my-2 [&_h2]:mt-5 [&_h2]:mb-2 [&_h2]:font-heading [&_h2]:text-lg [&_h2]:font-medium [&_h3]:mt-4 [&_h3]:mb-1.5 [&_h3]:font-medium",
-          "[&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li>p]:my-0.5",
-          "[&_blockquote]:my-3 [&_blockquote]:border-l-2 [&_blockquote]:border-primary/50 [&_blockquote]:pl-4 [&_blockquote]:text-muted-foreground",
-          "[&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-muted [&_pre]:p-3 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-[0.9em] [&_pre_code]:bg-transparent [&_pre_code]:p-0",
-          "[&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2 [&_hr]:my-4 [&_hr]:border-border",
-        ),
+        class: "sop-prose min-h-[28rem] px-5 py-5 outline-none sm:px-8 sm:py-7",
       },
     },
-    onUpdate: ({ editor }) => setValue(JSON.stringify(editor.getJSON())),
+    onFocus: ({ editor }) => markPlaced(editor),
   });
+}
 
+/** The toolbar and the page to write on. */
+export function SopEditor({ editor }: { editor: Editor | null }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-input bg-transparent focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:bg-input/30">
-      <input type="hidden" name={name} value={value} />
-      {editor ? <Toolbar editor={editor} /> : <div className="h-11 border-b" />}
+    <div className="rounded-xl border border-input bg-card focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
+      {editor ? <Toolbar editor={editor} /> : <div className="h-11 rounded-t-xl border-b bg-surface" />}
       <EditorContent editor={editor} />
     </div>
   );
@@ -83,6 +97,8 @@ function Toolbar({ editor }: { editor: Editor }) {
       h3: editor.isActive("heading", { level: 3 }),
       bullet: editor.isActive("bulletList"),
       ordered: editor.isActive("orderedList"),
+      task: editor.isActive("taskList"),
+      steps: editor.isActive("steps"),
       quote: editor.isActive("blockquote"),
       link: editor.isActive("link"),
       canUndo: editor.can().undo(),
@@ -92,9 +108,18 @@ function Toolbar({ editor }: { editor: Editor }) {
   const chain = () => editor.chain().focus();
 
   return (
-    <div role="toolbar" aria-label="Formatting" className="flex flex-wrap items-center gap-0.5 border-b bg-surface/60 p-1.5">
-      <Tool label="Heading" active={state.h2} onClick={() => chain().toggleHeading({ level: 2 }).run()} icon={Heading2Icon} />
-      <Tool label="Subheading" active={state.h3} onClick={() => chain().toggleHeading({ level: 3 }).run()} icon={Heading3Icon} />
+    <div
+      role="toolbar"
+      aria-label="Formatting"
+      className="sticky top-14 z-10 flex flex-wrap items-center gap-0.5 rounded-t-xl border-b bg-surface p-1.5 lg:top-0"
+    >
+      <InsertMenu editor={editor}>
+        <Button type="button" variant="secondary" size="sm" className="mr-1 lg:hidden">
+          <PlusIcon /> Insert
+        </Button>
+      </InsertMenu>
+      <Tool label="Section heading" active={state.h2} onClick={() => chain().toggleHeading({ level: 2 }).run()} icon={Heading2Icon} />
+      <Tool label="Subsection heading" active={state.h3} onClick={() => chain().toggleHeading({ level: 3 }).run()} icon={Heading3Icon} />
       <Divider />
       <Tool label="Bold" shortcut="Ctrl+B" active={state.bold} onClick={() => chain().toggleBold().run()} icon={BoldIcon} />
       <Tool label="Italic" shortcut="Ctrl+I" active={state.italic} onClick={() => chain().toggleItalic().run()} icon={ItalicIcon} />
@@ -103,6 +128,8 @@ function Toolbar({ editor }: { editor: Editor }) {
       <Tool label="Inline code" active={state.code} onClick={() => chain().toggleCode().run()} icon={CodeIcon} />
       <LinkTool editor={editor} active={state.link} />
       <Divider />
+      <Tool label="Step by step" active={state.steps} onClick={() => chain().toggleList("steps", "step").run()} icon={FootprintsIcon} />
+      <Tool label="Checklist" active={state.task} onClick={() => chain().toggleTaskList().run()} icon={ListChecksIcon} />
       <Tool label="Bulleted list" active={state.bullet} onClick={() => chain().toggleBulletList().run()} icon={ListIcon} />
       <Tool label="Numbered list" active={state.ordered} onClick={() => chain().toggleOrderedList().run()} icon={ListOrderedIcon} />
       <Tool label="Quote" active={state.quote} onClick={() => chain().toggleBlockquote().run()} icon={QuoteIcon} />
@@ -166,6 +193,8 @@ function LinkTool({ editor, active }: { editor: Editor; active: boolean }) {
 
   const apply = (event: React.FormEvent) => {
     event.preventDefault();
+    // React bubbles the submit through the popover's portal to the SOP form, which would save it.
+    event.stopPropagation();
     const url = href.trim();
     if (!url) editor.chain().focus().extendMarkRange("link").unsetLink().run();
     else {

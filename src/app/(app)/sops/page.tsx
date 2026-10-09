@@ -8,6 +8,7 @@ import { SopsStep } from "@/features/editors/components/onboarding/sops-step";
 import { SopAdminList } from "@/features/sops/components/sop-admin-list";
 import { SOP_CATEGORY_LABEL } from "@/features/sops/constants";
 import { getSopAdminList, getSopLibrary } from "@/features/sops/queries";
+import { workspaceLogoUrl } from "@/features/workspaces/constants";
 import { can, requireUser } from "@/lib/auth";
 import { Constants } from "@/types/database";
 
@@ -21,6 +22,7 @@ export const metadata: Metadata = { title: "SOPs" };
  */
 export default async function SopsPage() {
   const user = await requireUser({ allowOnboarding: true });
+  const workspace = { name: user.workspace.name, logoUrl: workspaceLogoUrl(user.workspace.logo_path) };
 
   if (can(user, "sops.manage")) {
     const { sops, teamSize, renderedAt } = await getSopAdminList();
@@ -58,7 +60,12 @@ export default async function SopsPage() {
           ) : (
             categories.map((category) => (
               <Panel key={category} title={SOP_CATEGORY_LABEL[category]}>
-                <SopAdminList sops={sops.filter((sop) => sop.category === category)} teamSize={teamSize} renderedAt={renderedAt} />
+                <SopAdminList
+                  sops={sops.filter((sop) => sop.category === category)}
+                  teamSize={teamSize}
+                  workspace={workspace}
+                  renderedAt={renderedAt}
+                />
               </Panel>
             ))
           )}
@@ -82,7 +89,12 @@ export default async function SopsPage() {
         ) : (
           categories.map((category) => (
             <Panel key={category} title={SOP_CATEGORY_LABEL[category]}>
-              <SopsStep sops={sops.filter((sop) => sop.category === category)} renderedAt={renderedAt} canAcknowledge />
+              <SopsStep
+                sops={sops.filter((sop) => sop.category === category)}
+                workspace={workspace}
+                renderedAt={renderedAt}
+                canAcknowledge
+              />
             </Panel>
           ))
         )}

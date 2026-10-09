@@ -208,7 +208,7 @@ export async function getOnboarding(user: CurrentUser) {
       supabase.from("editor_payment_details").select("method, details, updated_at").eq("editor_id", user.id).maybeSingle(),
       supabase
         .from("sops")
-        .select("id, title, category, content, acknowledgments:sop_acknowledgments(acknowledged_at)")
+        .select("id, title, category, content, updated_at, acknowledgments:sop_acknowledgments(acknowledged_at)")
         .eq("is_required", true)
         .eq("is_published", true)
         .order("title"),
@@ -253,6 +253,7 @@ export async function getOnboarding(user: CurrentUser) {
       title: sop.title,
       category: sop.category,
       content: sop.content,
+      updatedAt: sop.updated_at,
       acknowledgedAt: sop.acknowledgments[0]?.acknowledged_at ?? null,
     })),
     trialTasks: (trials ?? []).map((t) => ({

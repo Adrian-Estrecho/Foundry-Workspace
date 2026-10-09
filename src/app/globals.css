@@ -26,6 +26,7 @@
 @theme inline {
   --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
   --font-heading: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-literata), ui-serif, Georgia, serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
   --color-background: var(--background);
@@ -99,7 +100,9 @@
 }
 
 /* ---- Light ---------------------------------------------------------------- */
-:root {
+/* .sop-paper: an SOP page is white paper in either theme. */
+:root,
+.sop-paper {
   --radius: 0.625rem;
 
   --background: oklch(0.975 calc(0.004 * var(--tint)) var(--brand-h));
@@ -128,6 +131,7 @@
   --success: oklch(0.6 0.15 158);
   --warning: oklch(0.72 0.16 75);
   --danger: oklch(0.58 0.22 27);
+  --violet: oklch(0.55 0.19 295);
   --status-working: oklch(0.64 0.17 150);
   --status-break: oklch(0.76 0.16 80);
   --status-online: oklch(0.62 0.13 240);
@@ -177,6 +181,7 @@
   --success: oklch(0.8 0.16 160);
   --warning: oklch(0.84 0.15 85);
   --danger: oklch(0.68 0.19 25);
+  --violet: oklch(0.74 0.14 295);
   --status-working: oklch(0.8 0.17 155);
   --status-break: oklch(0.85 0.15 88);
   --status-online: oklch(0.76 0.11 235);
@@ -244,5 +249,309 @@
   /* Tabular numbers for timers, KPIs and tables. */
   .tabular {
     font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ---- SOP documents -------------------------------------------------------- */
+/* The SOP editor and reader render the same markup (sop-content.tsx mirrors
+   the editor's nodes), so these rules style both. The reader's page adds
+   .sop-paper: light tokens (see the Light block) and a book serif. */
+
+.sop-paper {
+  color-scheme: light;
+}
+
+/* Callout tones, also used by the element swatches. */
+[data-callout] {
+  --callout: var(--status-online);
+  --callout-ink: color-mix(in oklab, var(--callout) 72%, var(--foreground));
+}
+[data-callout="tip"],
+[data-callout="do"] {
+  --callout: var(--success);
+}
+[data-callout="guideline"] {
+  --callout: var(--primary);
+}
+[data-callout="important"] {
+  --callout: var(--violet);
+}
+[data-callout="warning"] {
+  --callout: var(--warning);
+}
+[data-callout="dont"] {
+  --callout: var(--danger);
+}
+
+@layer components {
+  .sop-swatch {
+    background: color-mix(in oklab, var(--callout) 15%, transparent);
+    color: var(--callout-ink);
+  }
+
+  .sop-prose {
+    font-size: 0.9375rem;
+    line-height: 1.7;
+    overflow-wrap: break-word;
+  }
+  .sop-paper .sop-prose {
+    font-family: var(--font-literata), ui-serif, Georgia, serif;
+    font-size: 1.0625rem;
+    line-height: 1.75;
+  }
+  .sop-prose > :first-child {
+    margin-top: 0;
+  }
+  .sop-prose > :last-child {
+    margin-bottom: 0;
+  }
+
+  .sop-prose p {
+    margin: 0.75em 0;
+  }
+  .sop-prose h2 {
+    margin: 2em 0 0.6em;
+    font-size: 1.45em;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    scroll-margin-top: 1.5rem;
+  }
+  .sop-prose h3 {
+    margin: 1.6em 0 0.45em;
+    font-size: 1.15em;
+    font-weight: 600;
+    line-height: 1.35;
+    scroll-margin-top: 1.5rem;
+  }
+  .sop-prose :is(h2, h3) + * {
+    margin-top: 0;
+  }
+  .sop-section-number {
+    margin-right: 0.55em;
+    color: var(--primary);
+    font-family: var(--font-outfit), ui-sans-serif, sans-serif;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .sop-prose strong {
+    font-weight: 600;
+  }
+  .sop-prose a {
+    color: var(--primary);
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+  }
+  .sop-prose :not(pre) > code {
+    border-radius: 0.3em;
+    background: var(--muted);
+    padding: 0.1em 0.35em;
+    font-family: var(--font-geist-mono), ui-monospace, monospace;
+    font-size: 0.85em;
+  }
+  .sop-prose pre {
+    margin: 1em 0;
+    overflow-x: auto;
+    border-radius: var(--radius);
+    background: var(--muted);
+    padding: 0.85em 1.1em;
+    font-family: var(--font-geist-mono), ui-monospace, monospace;
+    font-size: 0.82em;
+    line-height: 1.6;
+  }
+  .sop-prose blockquote {
+    margin: 1.25em 0;
+    border-left: 3px solid color-mix(in oklab, var(--primary) 55%, transparent);
+    padding-left: 1.1em;
+    color: var(--muted-foreground);
+    font-style: italic;
+  }
+  .sop-prose hr {
+    margin: 2em 0;
+    border: 0;
+    border-top: 1px solid var(--border);
+  }
+  .sop-prose ul:not([data-type]) {
+    margin: 0.75em 0;
+    padding-left: 1.4em;
+    list-style: disc;
+  }
+  .sop-prose ol:not([data-type]) {
+    margin: 0.75em 0;
+    padding-left: 1.5em;
+    list-style: decimal;
+  }
+  .sop-prose li > p {
+    margin: 0.25em 0;
+  }
+  .sop-prose li::marker {
+    color: var(--muted-foreground);
+  }
+
+  /* Step by step: numbered circles joined by a line. */
+  .sop-prose ol[data-type="steps"] {
+    counter-reset: sop-step;
+    margin: 1.25em 0;
+    padding: 0;
+    list-style: none;
+  }
+  .sop-prose li[data-type="step"] {
+    position: relative;
+    counter-increment: sop-step;
+    min-height: 1.75em;
+    padding: 0 0 1.1em 2.7em;
+  }
+  .sop-prose li[data-type="step"]:last-child {
+    padding-bottom: 0;
+  }
+  .sop-prose li[data-type="step"] > :first-child {
+    margin-top: 0;
+  }
+  .sop-prose li[data-type="step"]::before {
+    content: counter(sop-step);
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: grid;
+    place-items: center;
+    width: 2.2em;
+    height: 2.2em;
+    border-radius: 9999px;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    font-family: var(--font-outfit), ui-sans-serif, sans-serif;
+    font-size: 0.78em;
+    font-weight: 600;
+    font-style: normal;
+    line-height: 1;
+  }
+  .sop-prose li[data-type="step"]:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    top: 2.05em;
+    bottom: 0.3em;
+    left: calc(0.86em - 1px);
+    width: 2px;
+    border-radius: 1px;
+    background: color-mix(in oklab, var(--primary) 28%, var(--border));
+  }
+
+  /* Checklist */
+  .sop-prose ul[data-type="taskList"] {
+    margin: 0.75em 0;
+    padding: 0;
+    list-style: none;
+  }
+  .sop-prose li[data-type="taskItem"] {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7em;
+    margin: 0.3em 0;
+  }
+  .sop-prose li[data-type="taskItem"] > label {
+    display: flex;
+    flex: none;
+    align-items: center;
+    height: 1.7em;
+  }
+  .sop-prose li[data-type="taskItem"] > label > span {
+    display: none;
+  }
+  .sop-prose li[data-type="taskItem"] > div {
+    flex: 1;
+    min-width: 0;
+  }
+  .sop-prose li[data-type="taskItem"] > div > p {
+    margin: 0;
+  }
+  .sop-prose li[data-type="taskItem"] input[type="checkbox"] {
+    display: grid;
+    place-content: center;
+    width: 1.05em;
+    height: 1.05em;
+    margin: 0;
+    border: 1.5px solid color-mix(in oklab, var(--foreground) 35%, transparent);
+    border-radius: 0.3em;
+    appearance: none;
+    cursor: pointer;
+    transition:
+      background-color 0.15s,
+      border-color 0.15s;
+  }
+  .sop-prose li[data-type="taskItem"] input[type="checkbox"]::after {
+    content: "";
+    width: 0.3em;
+    height: 0.55em;
+    margin-top: -0.12em;
+    border: solid var(--primary-foreground);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg) scale(0);
+    transition: transform 0.15s;
+  }
+  .sop-prose li[data-type="taskItem"] input[type="checkbox"]:checked {
+    border-color: var(--primary);
+    background: var(--primary);
+  }
+  .sop-prose li[data-type="taskItem"] input[type="checkbox"]:checked::after {
+    transform: rotate(45deg) scale(1);
+  }
+  .sop-prose li[data-type="taskItem"] input[type="checkbox"]:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .sop-prose li[data-type="taskItem"]:has(> label input:checked) > div {
+    color: var(--muted-foreground);
+    text-decoration: line-through;
+  }
+
+  /* Callout boxes */
+  .sop-prose aside[data-type="callout"] {
+    margin: 1.25em 0;
+    border: 1px solid color-mix(in oklab, var(--callout) 22%, transparent);
+    border-left: 3px solid var(--callout);
+    border-radius: calc(var(--radius) * 0.8);
+    background: color-mix(in oklab, var(--callout) 7%, transparent);
+    padding: 0.8em 1.1em 0.9em;
+  }
+  .sop-callout-label {
+    display: flex;
+    align-items: center;
+    gap: 0.45em;
+    margin-bottom: 0.3em;
+    color: var(--callout-ink);
+    font-family: var(--font-outfit), ui-sans-serif, sans-serif;
+    font-size: 0.72em;
+    font-style: normal;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    line-height: 1.6;
+    text-transform: uppercase;
+    user-select: none;
+  }
+  .sop-callout-label svg {
+    width: 1.35em;
+    height: 1.35em;
+    flex: none;
+  }
+  .sop-callout-body > :first-child,
+  .sop-callout-body > [data-node-view-content-react] > :first-child {
+    margin-top: 0;
+  }
+  .sop-callout-body > :last-child,
+  .sop-callout-body > [data-node-view-content-react] > :last-child {
+    margin-bottom: 0;
+  }
+
+  /* Editor only: hints in empty lines, and a selected block. */
+  .sop-prose :is(p, h2, h3).is-empty::before {
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    color: color-mix(in oklab, var(--muted-foreground) 75%, transparent);
+    pointer-events: none;
+  }
+  .sop-prose .ProseMirror-selectednode {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
 }
