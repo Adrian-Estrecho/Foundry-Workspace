@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowRightIcon, ExternalLinkIcon, LinkIcon, MoreHorizontalIcon, PlusIcon, SearchIcon, Trash2Icon } from "lucide-react";
 import { KanbanBoard } from "@/components/shared/kanban-board";
+import { StatusFilter } from "@/components/shared/status-filter";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,18 +55,25 @@ export function ClientPipeline({
 }) {
   const router = useRouter();
   const [query, setQuery] = React.useState("");
+  const [stages, setStages] = React.useState<string[]>([]);
   const [newOpen, setNewOpen] = React.useState(false);
   const [kickoff, setKickoff] = React.useState<PipelineClient | null>(null);
   const [toDelete, setToDelete] = React.useState<PipelineClient | null>(null);
   const [deleting, startDelete] = React.useTransition();
 
-  const visible = React.useMemo(() => {
+  const matching = React.useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return clients;
     return clients.filter((c) =>
       [c.name, c.contactName, c.email, c.projectType].some((value) => value?.toLowerCase().includes(q)),
     );
   }, [clients, query]);
+  // The stage filter hides the other columns.
+  const columns = React.useMemo(() => (stages.length ? COLUMNS.filter((c) => stages.includes(c.id)) : COLUMNS), [stages]);
+  const visible = React.useMemo(
+    () => (stages.length ? matching.filter((c) => stages.includes(c.column)) : matching),
+    [matching, stages],
+  );
 
   /** After any stage change: confirm, and prompt for the first project at Kickoff. */
   const afterStageChange = (client: PipelineClient, stage: ClientStage) => {
@@ -126,6 +134,18 @@ export function ClientPipeline({
             className="rounded-full bg-surface pl-9"
           />
         </div>
+        <StatusFilter
+          noun="stages"
+          value={stages}
+          onChange={setStages}
+          options={CLIENT_STAGES.map((stage) => ({
+            id: stage.value,
+            label: stage.label,
+            dot: stage.dot,
+            count: matching.filter((c) => c.column === stage.value).length,
+          }))}
+          className="bg-surface"
+        />
         <div className="ml-auto flex gap-2">
           <Button variant="secondary" onClick={copyIntakeLink} className="bg-surface ring-1 ring-border">
             <LinkIcon /> Intake form link
@@ -139,7 +159,7 @@ export function ClientPipeline({
       <KanbanBoard
         ariaLabel="Client pipeline"
         scrollbarAtWindowBottom
-        columns={COLUMNS}
+        columns={columns}
         items={visible}
         onMove={onMove}
         itemLabel={(client) => client.name}

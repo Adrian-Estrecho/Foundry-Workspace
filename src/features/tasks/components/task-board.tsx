@@ -18,39 +18,46 @@ type BoardTask = TaskSummary & { column: string };
  * Done by default). Admins can drop anywhere (entering Revisions asks what to
  * change) and add statuses; editors move their own tasks up to the For
  * Review stage. `addTasks` is off where tasks are added elsewhere (a
- * project synced from ClickUp).
+ * project synced from ClickUp). `only` limits the columns to some statuses
+ * (a status filter).
  */
 export function TaskBoard({
   tasks,
   draft,
   emptyText,
   addTasks = true,
+  only,
 }: {
   tasks: TaskSummary[];
   draft?: TaskDraft;
   emptyText?: string;
   addTasks?: boolean;
+  /** Status ids whose columns to show; all when missing or empty. */
+  only?: string[];
 }) {
   const workspace = useTaskWorkspace();
   const items = React.useMemo<BoardTask[]>(() => tasks.map((task) => ({ ...task, column: task.statusInfo.id })), [tasks]);
 
-  const columns: KanbanColumn[] = workspace.statuses.map((status) => ({
-    id: status.id,
-    label: status.name,
-    dot: statusColor(status.color).dot,
-    action:
-      workspace.access.manage && addTasks && status.stage !== "done" ? (
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="rounded-full text-muted-foreground"
-          aria-label={`New task in ${status.name}`}
-          onClick={() => workspace.newTask({ ...draft, statusId: status.id })}
-        >
-          <PlusIcon />
-        </Button>
-      ) : undefined,
-  }));
+  const filtered = Boolean(only?.length);
+  const columns: KanbanColumn[] = workspace.statuses
+    .filter((status) => !filtered || only!.includes(status.id))
+    .map((status) => ({
+      id: status.id,
+      label: status.name,
+      dot: statusColor(status.color).dot,
+      action:
+        workspace.access.manage && addTasks && status.stage !== "done" ? (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="rounded-full text-muted-foreground"
+            aria-label={`New task in ${status.name}`}
+            onClick={() => workspace.newTask({ ...draft, statusId: status.id })}
+          >
+            <PlusIcon />
+          </Button>
+        ) : undefined,
+    }));
 
   return (
     <KanbanBoard
@@ -73,7 +80,7 @@ export function TaskBoard({
         />
       )}
       trailing={
-        workspace.access.statuses ? (
+        workspace.access.statuses && !filtered ? (
           <button
             type="button"
             onClick={() => workspace.addStatus()}
