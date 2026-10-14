@@ -14,42 +14,60 @@ import {
   SendIcon,
 } from "lucide-react";
 import { EmptyState, PageHeader } from "@/components/shared/panel";
-import { Segmented } from "@/components/shared/segmented";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { addDays } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import type { TaskAccess } from "../access";
-import { priorityRank, type TaskStatusDef } from "../constants";
-import type { TaskSummary } from "../queries";
+import { MY_TASK_VIEWS, priorityRank, RECENT_DONE_DAYS, type TaskStatusDef } from "../constants";
+import { activeFilterCount, taskFiltersQuery, type TaskFilters } from "../filters";
+import type { TaskFormOptions, TaskSummary } from "../queries";
 import { DueChip, PriorityFlag, TaskStatusChip } from "./task-bits";
 import { TaskBoard } from "./task-board";
+import { TaskCalendar } from "./task-calendar";
 import { taskContext } from "./task-card";
+import { TaskFilterBar } from "./task-filters";
 import { TaskMenu, taskHref } from "./task-menu";
-import { TaskWorkspace, useTaskWorkspace } from "./task-workspace";
+import { TaskViewNav } from "./task-views";
+import { TaskStatusesButton, TaskWorkspace, useTaskWorkspace } from "./task-workspace";
 
 const byDue = (a: TaskSummary, b: TaskSummary) =>
   (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999") || priorityRank(b.priority) - priorityRank(a.priority);
 
-/** An editor's own work: overdue, today, upcoming, plus what's waiting on review. */
+/**
+ * An editor's own work, laid out like the Tasks page: the same Kanban,
+ * filters (all but the editor one) and calendar. The list groups it into
+ * overdue, today and upcoming, with the next step as a button.
+ */
 export function MyTasks({
   access,
   tasks,
+  filters,
+  options,
   statuses,
   today,
-  view,
+  month,
+  counts,
 }: {
   /** Their own tasks only, but abilities still apply (e.g. marking Done). */
   access: TaskAccess;
   tasks: TaskSummary[];
+  filters: TaskFilters;
+  /** For the client and project filters. */
+  options: TaskFormOptions;
   statuses: TaskStatusDef[];
   today: string;
-  view: "list" | "board";
+  month: string;
+  counts: { open: number; dueToday: number; overdue: number };
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const [pending, startTransition] = React.useTransition();
 
+  const navigate = (patch: Partial<TaskFilters>) =>
+    startTransition(() => router.replace(`${pathname}${taskFiltersQuery({ ...filters, ...patch })}`, { scroll: false }));
+
+  const filtering = activeFilterCount(filters) > 0;
   const open = tasks.filter((t) => t.status !== "done");
   const overdue = open.filter((t) => t.dueDate && t.dueDate < today).sort(byDue);
   const dueToday = open.filter((t) => t.dueDate === today).sort(byDue);
@@ -63,57 +81,80 @@ export function MyTasks({
         title="My Tasks"
         description={
           <>
-            {open.length} open · {dueToday.length} due today ·{" "}
-            <span className={cn(overdue.length > 0 && "text-danger")}>{overdue.length} overdue</span>
+            {counts.open} open ·{" "}
+            <Link href={`/my-tasks${taskFiltersQuery({ view: "list", due: "today" })}`} className="hover:underline">
+              {counts.dueToday} due today
+            </Link>{" "}
+            ·{" "}
+            <Link
+              href={`/my-tasks${taskFiltersQuery({ view: "list", due: "overdue" })}`}
+              className={cn("hover:underline", counts.overdue > 0 && "text-danger")}
+            >
+              {counts.overdue} overdue
+            </Link>
           </>
         }
-        actions={
-          <Segmented
-            label="View"
-            value={view}
-            onChange={(value) => startTransition(() => router.replace(value === "list" ? pathname : `${pathname}?view=board`, { scroll: false }))}
-            options={[
-              { value: "list", label: "List" },
-              { value: "board", label: "Board" },
-            ]}
-          />
-        }
+        actions={<TaskStatusesButton />}
       />
 
-      <div className={cn("transition-opacity", pending && "opacity-60")}>
-        {view === "board" ? (
-          <TaskBoard tasks={tasks} />
-        ) : tasks.length === 0 ? (
-          <div className="rounded-xl border bg-card">
-            <EmptyState icon={ListTodoIcon} title="No tasks yet" description="When your team assigns you work, it shows up here and you'll get a notification." />
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-6">
-            {overdue.length > 0 && <Group label="Overdue" tone="danger" tasks={overdue} />}
-            <Group label="Today" tasks={dueToday} empty="Nothing due today." />
-            <Group
-              label="Upcoming"
-              hint={thisWeek.length ? `${thisWeek.length} due in the next 7 days` : undefined}
-              tasks={upcoming}
-              empty="Nothing else on your plate."
-            />
-            {done.length > 0 && (
-              <Collapsible>
-                <CollapsibleTrigger className="group flex items-center gap-1.5 px-1 text-sm font-medium text-muted-foreground hover:text-foreground">
-                  <ChevronDownIcon className="size-4 transition-transform group-data-[state=closed]:-rotate-90" />
-                  Recently done · {done.length}
-                </CollapsibleTrigger>
-                <CollapsibleContent className="mt-2">
-                  <ul className="grid grid-cols-1 gap-1.5">
-                    {done.map((task) => (
-                      <MyTaskRow key={task.id} task={task} />
-                    ))}
-                  </ul>
-                </CollapsibleContent>
-              </Collapsible>
+      <TaskViewNav filters={filters} views={MY_TASK_VIEWS} />
+
+      <TaskFilterBar
+        filters={filters}
+        options={options}
+        statuses={statuses}
+        onChange={navigate}
+        hide={filters.view === "calendar" ? ["editor", "due"] : ["editor"]}
+      />
+
+      <div className={cn("transition-opacity", pending && "opacity-60")} aria-busy={pending}>
+        {filters.view === "board" && (
+          <>
+            <TaskBoard tasks={tasks} emptyText={filtering ? "No matches" : undefined} />
+            {!filters.status && (
+              <p className="-mt-3 text-xs text-muted-foreground">Done shows tasks completed in the last {RECENT_DONE_DAYS} days.</p>
             )}
-          </div>
+          </>
         )}
+        {filters.view === "calendar" && <TaskCalendar tasks={tasks} month={month} onMonthChange={(m) => navigate({ month: m })} />}
+        {filters.view === "list" &&
+          (tasks.length === 0 ? (
+            <div className="rounded-xl border bg-card">
+              {filtering ? (
+                <EmptyState icon={ListTodoIcon} title="No matches" description="None of your tasks match these filters." />
+              ) : (
+                <EmptyState icon={ListTodoIcon} title="No tasks yet" description="When your team assigns you work, it shows up here and you'll get a notification." />
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-6">
+              {overdue.length > 0 && <Group label="Overdue" tone="danger" tasks={overdue} />}
+              {(!filtering || dueToday.length > 0) && <Group label="Today" tasks={dueToday} empty="Nothing due today." />}
+              {(!filtering || upcoming.length > 0) && (
+                <Group
+                  label="Upcoming"
+                  hint={thisWeek.length ? `${thisWeek.length} due in the next 7 days` : undefined}
+                  tasks={upcoming}
+                  empty="Nothing else on your plate."
+                />
+              )}
+              {done.length > 0 && (
+                <Collapsible>
+                  <CollapsibleTrigger className="group flex items-center gap-1.5 px-1 text-sm font-medium text-muted-foreground hover:text-foreground">
+                    <ChevronDownIcon className="size-4 transition-transform group-data-[state=closed]:-rotate-90" />
+                    Recently done · {done.length}
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="mt-2">
+                    <ul className="grid grid-cols-1 gap-1.5">
+                      {done.map((task) => (
+                        <MyTaskRow key={task.id} task={task} />
+                      ))}
+                    </ul>
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
+            </div>
+          ))}
       </div>
     </TaskWorkspace>
   );

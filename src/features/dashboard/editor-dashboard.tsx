@@ -56,15 +56,15 @@ export function EditorDashboard({ user, data }: { user: CurrentUser; data: Data 
       />
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiTile label="Due today" value={kpis.dueToday} icon={CalendarClockIcon} href="/my-tasks" />
+        <KpiTile label="Due today" value={kpis.dueToday} icon={CalendarClockIcon} href="/my-tasks?view=list&due=today" />
         <KpiTile
           label="Overdue"
           value={kpis.overdue}
           icon={AlarmClockIcon}
           tone={kpis.overdue > 0 ? "danger" : "default"}
-          href="/my-tasks"
+          href="/my-tasks?view=list&due=overdue"
         />
-        <KpiTile label="Waiting for review" value={kpis.inReview} icon={EyeIcon} href="/my-tasks" />
+        <KpiTile label="Waiting for review" value={kpis.inReview} icon={EyeIcon} href="/my-tasks?status=for_review" />
         <KpiTile
           label="Hours this week"
           value={toHours(kpis.hoursThisWeek)}

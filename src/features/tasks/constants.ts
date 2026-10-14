@@ -42,6 +42,9 @@ export const TASK_VIEWS = [
 
 export type TaskView = (typeof TASK_VIEWS)[number]["value"];
 
+/** The views on My Tasks: the Tasks page's, minus By Editor (it's all theirs). */
+export const MY_TASK_VIEWS: TaskView[] = ["board", "list", "calendar"];
+
 export const DUE_FILTERS = [
   { value: "overdue", label: "Overdue" },
   { value: "today", label: "Due today" },

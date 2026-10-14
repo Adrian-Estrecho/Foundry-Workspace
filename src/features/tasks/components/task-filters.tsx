@@ -26,8 +26,8 @@ export function TaskFilterBar({
   options: TaskFormOptions;
   statuses: TaskStatusDef[];
   onChange: (patch: Partial<TaskFilters>) => void;
-  /** Filters that don't apply to the current view. */
-  hide?: ("status" | "due")[];
+  /** Filters that don't apply here (the view, or My Tasks for the editor). */
+  hide?: ("editor" | "status" | "due")[];
 }) {
   const [query, setQuery] = React.useState(filters.q);
   const [expanded, setExpanded] = React.useState(false);
@@ -93,20 +93,22 @@ export function TaskFilterBar({
       </div>
 
       <div id="task-filters" className={cn("grid grid-cols-2 gap-2 sm:flex sm:flex-wrap", !expanded && "hidden sm:flex")}>
-        <NativeSelect
-          aria-label="Editor"
-          className={select}
-          value={filters.editor ?? ""}
-          onChange={(event) => onChange({ editor: event.target.value || null })}
-        >
-          <option value="">All editors</option>
-          <option value="none">Unassigned</option>
-          {editors.map((editor) => (
-            <option key={editor.id} value={editor.id}>
-              {editor.name}
-            </option>
-          ))}
-        </NativeSelect>
+        {!hide.includes("editor") && (
+          <NativeSelect
+            aria-label="Editor"
+            className={select}
+            value={filters.editor ?? ""}
+            onChange={(event) => onChange({ editor: event.target.value || null })}
+          >
+            <option value="">All editors</option>
+            <option value="none">Unassigned</option>
+            {editors.map((editor) => (
+              <option key={editor.id} value={editor.id}>
+                {editor.name}
+              </option>
+            ))}
+          </NativeSelect>
+        )}
         <NativeSelect
           aria-label="Client"
           className={select}

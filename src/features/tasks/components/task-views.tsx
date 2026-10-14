@@ -76,27 +76,7 @@ export function TaskViews({
         }
       />
 
-      <nav aria-label="Task views" className="mb-4 inline-flex max-w-full overflow-x-auto rounded-lg bg-muted p-0.5 scrollbar-none">
-        {TASK_VIEWS.map((view) => {
-          const Icon = VIEW_ICONS[view.value];
-          const active = view.value === filters.view;
-          return (
-            <Link
-              key={view.value}
-              href={`${pathname}${taskFiltersQuery({ ...filters, view: view.value })}`}
-              scroll={false}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-sm whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <Icon className="size-4" />
-              {view.label}
-            </Link>
-          );
-        })}
-      </nav>
+      <TaskViewNav filters={filters} />
 
       <TaskFilterBar filters={filters} options={options} statuses={statuses} onChange={navigate} hide={filters.view === "calendar" ? ["due"] : []} />
 
@@ -114,6 +94,34 @@ export function TaskViews({
         {filters.view === "editors" && <TaskWorkload tasks={tasks} editors={options.editors} />}
       </div>
     </TaskWorkspace>
+  );
+}
+
+/** Kanban, List, Calendar and By Editor as tabs; switching keeps the filters. My Tasks leaves out By Editor. */
+export function TaskViewNav({ filters, views = TASK_VIEWS.map((view) => view.value) }: { filters: TaskFilters; views?: TaskView[] }) {
+  const pathname = usePathname();
+  return (
+    <nav aria-label="Task views" className="mb-4 inline-flex max-w-full overflow-x-auto rounded-lg bg-muted p-0.5 scrollbar-none">
+      {TASK_VIEWS.filter((view) => views.includes(view.value)).map((view) => {
+        const Icon = VIEW_ICONS[view.value];
+        const active = view.value === filters.view;
+        return (
+          <Link
+            key={view.value}
+            href={`${pathname}${taskFiltersQuery({ ...filters, view: view.value })}`}
+            scroll={false}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-sm whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <Icon className="size-4" />
+            {view.label}
+          </Link>
+        );
+      })}
+    </nav>
   );
 }
 

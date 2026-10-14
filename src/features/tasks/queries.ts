@@ -180,27 +180,22 @@ export async function getTaskFormOptions(): Promise<TaskFormOptions> {
   };
 }
 
-// -----------------------------------------------------------------------------
-// /tasks (admin)
-// -----------------------------------------------------------------------------
-export async function getTasksPage(user: CurrentUser, filters: TaskFilters) {
-  const supabase = await createClient();
-  const today = todayIn(user.timezone);
-  const month = filters.month ?? today.slice(0, 7);
-  const grid = monthGrid(month);
-
-  let clientProjectIds: string[] | null = null;
+/**
+ * Runs a task query narrowed by the URL filters, the same way on Tasks and My
+ * Tasks. Without a status filter, Done keeps to recent work; the calendar
+ * gets its month and By Editor only open work.
+ */
+async function findTasks(query: ReturnType<typeof selectTasks>, filters: TaskFilters, today: string, month: string) {
   if (filters.client) {
+    const supabase = await createClient();
     const { data } = await supabase.from("projects").select("id").eq("client_id", filters.client);
-    clientProjectIds = (data ?? []).map((p) => p.id);
+    const ids = (data ?? []).map((p) => p.id);
+    query = query.in("project_id", ids.length ? ids : [NO_MATCH]);
   }
-
-  let query = selectTasks(supabase).order("position").limit(1000);
 
   if (filters.editor === "none") query = query.is("assignee_id", null);
   else if (filters.editor) query = query.eq("assignee_id", filters.editor);
   if (filters.project) query = query.eq("project_id", filters.project);
-  if (clientProjectIds) query = query.in("project_id", clientProjectIds.length ? clientProjectIds : [NO_MATCH]);
   if (filters.status) query = isStage(filters.status) ? query.eq("status", filters.status) : query.eq("status_id", filters.status);
   if (filters.priority) query = query.eq("priority", filters.priority);
   if (filters.q) query = query.ilike("title", `%${filters.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
@@ -211,6 +206,7 @@ export async function getTasksPage(user: CurrentUser, filters: TaskFilters) {
   else if (filters.due === "none") query = query.is("due_date", null);
 
   if (filters.view === "calendar") {
+    const grid = monthGrid(month);
     query = query.gte("due_date", grid.start).lte("due_date", grid.end);
   } else if (filters.view === "editors") {
     // Workload means open work.
@@ -220,19 +216,31 @@ export async function getTasksPage(user: CurrentUser, filters: TaskFilters) {
     query = query.or(`status.neq.done,completed_at.gte."${since}"`);
   }
 
+  const { data, error } = await query;
+  if (error) throw error;
+  return toSummaries(data ?? []);
+}
+
+// -----------------------------------------------------------------------------
+// /tasks (admin)
+// -----------------------------------------------------------------------------
+export async function getTasksPage(user: CurrentUser, filters: TaskFilters) {
+  const supabase = await createClient();
+  const today = todayIn(user.timezone);
+  const month = filters.month ?? today.slice(0, 7);
+
   const count = { count: "exact" as const, head: true };
-  const [{ data, error }, options, statuses, open, overdue, forReview] = await Promise.all([
-    query,
+  const [tasks, options, statuses, open, overdue, forReview] = await Promise.all([
+    findTasks(selectTasks(supabase).order("position").limit(1000), filters, today, month),
     getTaskFormOptions(),
     getTaskStatuses(),
     supabase.from("tasks").select("id", count).neq("status", "done"),
     supabase.from("tasks").select("id", count).lt("due_date", today).neq("status", "done"),
     supabase.from("tasks").select("id", count).eq("status", "for_review"),
   ]);
-  if (error) throw error;
 
   return {
-    tasks: await toSummaries(data ?? []),
+    tasks,
     options,
     statuses,
     today,
@@ -244,19 +252,32 @@ export async function getTasksPage(user: CurrentUser, filters: TaskFilters) {
 // -----------------------------------------------------------------------------
 // /my-tasks (editor)
 // -----------------------------------------------------------------------------
-export async function getMyTasks(user: CurrentUser) {
+/** An editor's own tasks, with the same filters as /tasks (the editor filter aside). */
+export async function getMyTasks(user: CurrentUser, filters: TaskFilters) {
   const supabase = await createClient();
-  const since = new Date(Date.now() - RECENT_DONE_DAYS * 86_400_000).toISOString();
-  const [{ data, error }, statuses] = await Promise.all([
-    selectTasks(supabase)
-      .eq("assignee_id", user.id)
-      .or(`status.neq.done,completed_at.gte."${since}"`)
-      .order("position")
-      .limit(500),
+  const today = todayIn(user.timezone);
+  const month = filters.month ?? today.slice(0, 7);
+
+  const count = { count: "exact" as const, head: true };
+  const openOfMine = () => supabase.from("tasks").select("id", count).eq("assignee_id", user.id).neq("status", "done");
+  const [tasks, options, statuses, open, dueToday, overdue] = await Promise.all([
+    findTasks(selectTasks(supabase).eq("assignee_id", user.id).order("position").limit(500), { ...filters, editor: null }, today, month),
+    // Their projects (RLS), for the client and project filters.
+    getTaskFormOptions(),
     getTaskStatuses(),
+    openOfMine(),
+    openOfMine().eq("due_date", today),
+    openOfMine().lt("due_date", today),
   ]);
-  if (error) throw error;
-  return { tasks: await toSummaries(data ?? []), statuses, today: todayIn(user.timezone) };
+
+  return {
+    tasks,
+    options,
+    statuses,
+    today,
+    month,
+    counts: { open: open.count ?? 0, dueToday: dueToday.count ?? 0, overdue: overdue.count ?? 0 },
+  };
 }
 
 /** Tasks in one project (editors get only their own, through RLS). */
