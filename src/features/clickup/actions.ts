@@ -443,8 +443,8 @@ export async function setPipelineStart(pipelineId: string, startStatus: string):
 
 /**
  * Stops syncing one List and removes what it brought in: its tasks (with
- * their files), and the project too unless it has tasks of its own. Nothing
- * changes in ClickUp, and linking the List again brings the tasks back.
+ * their files), and the project too unless it has tasks people made here.
+ * Nothing changes in ClickUp, and linking the List again brings the tasks back.
  */
 export async function unlinkPipeline(pipelineId: string): Promise<ActionResult> {
   const found = await pipelineFor(pipelineId);
@@ -457,12 +457,14 @@ export async function unlinkPipeline(pipelineId: string): Promise<ActionResult> 
     const { error } = await admin.from("clickup_pipelines").delete().eq("id", pipeline.id).eq("workspace_id", ws);
     if (error) throw error;
 
+    // Synced tasks, plus ones an earlier unlink left behind: those lost their
+    // ClickUp id, but like every synced task they have no creator.
     const { data: tasks, error: tasksError } = await admin
       .from("tasks")
       .select("id")
       .eq("workspace_id", ws)
       .eq("project_id", pipeline.project_id)
-      .not("clickup_task_id", "is", null);
+      .or("clickup_task_id.not.is.null,created_by.is.null");
     if (tasksError) throw tasksError;
     await removeTasks(admin, (tasks ?? []).map((t) => t.id));
 

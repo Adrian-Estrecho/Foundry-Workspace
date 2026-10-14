@@ -227,18 +227,19 @@ function PipelineItem({ pipeline, renderedAt }: { pipeline: PipelineRow; rendere
 /** What unlinking removes here: the synced tasks, and the project unless it has tasks made in ReEdit. */
 function unlinkEffect(pipeline: PipelineRow) {
   const project = pipeline.project?.name ?? "The project";
-  const synced = pipeline.tasks === 1 ? "its synced task" : `its ${pipeline.tasks} synced tasks`;
+  const removed = pipeline.tasks + pipeline.leftovers;
+  const fromClickUp = removed === 1 ? "its task from ClickUp" : `its ${removed} tasks from ClickUp`;
   if (pipeline.ownTasks === 0) {
     return {
-      warning: `${project} is deleted from ReEdit${pipeline.tasks ? `, with ${synced} and their comments and files` : ""}.`,
+      warning: `${project} is deleted from ReEdit${removed ? `, with ${fromClickUp} and their comments and files` : ""}.`,
       done: `${project} was removed from ReEdit.`,
     };
   }
   const own = pipeline.ownTasks === 1 ? "the task" : `the ${pipeline.ownTasks} tasks`;
-  const deleted = pipeline.tasks === 1 ? "Its synced task is" : `Its ${pipeline.tasks} synced tasks are`;
+  const deleted = removed === 1 ? "Its task from ClickUp is" : `Its ${removed} tasks from ClickUp are`;
   return {
-    warning: `${pipeline.tasks ? `${deleted} deleted, with their comments and files. ` : ""}${project} stays, with ${own} made in ReEdit.`,
-    done: `Its synced tasks were removed. ${project} stays.`,
+    warning: `${removed ? `${deleted} deleted, with their comments and files. ` : ""}${project} stays, with ${own} people made in ReEdit.`,
+    done: `Its tasks from ClickUp were removed. ${project} stays.`,
   };
 }
 
