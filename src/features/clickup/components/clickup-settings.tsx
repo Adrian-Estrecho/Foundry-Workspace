@@ -224,26 +224,45 @@ function PipelineItem({ pipeline, renderedAt }: { pipeline: PipelineRow; rendere
   );
 }
 
+/** What unlinking removes here: the synced tasks, and the project unless it has tasks made in ReEdit. */
+function unlinkEffect(pipeline: PipelineRow) {
+  const project = pipeline.project?.name ?? "The project";
+  const synced = pipeline.tasks === 1 ? "its synced task" : `its ${pipeline.tasks} synced tasks`;
+  if (pipeline.ownTasks === 0) {
+    return {
+      warning: `${project} is deleted from ReEdit${pipeline.tasks ? `, with ${synced} and their comments and files` : ""}.`,
+      done: `${project} was removed from ReEdit.`,
+    };
+  }
+  const own = pipeline.ownTasks === 1 ? "the task" : `the ${pipeline.ownTasks} tasks`;
+  const deleted = pipeline.tasks === 1 ? "Its synced task is" : `Its ${pipeline.tasks} synced tasks are`;
+  return {
+    warning: `${pipeline.tasks ? `${deleted} deleted, with their comments and files. ` : ""}${project} stays, with ${own} made in ReEdit.`,
+    done: `Its synced tasks were removed. ${project} stays.`,
+  };
+}
+
 function UnlinkDialog({ pipeline, open, onOpenChange }: { pipeline: PipelineRow; open: boolean; onOpenChange: (open: boolean) => void }) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
+  const effect = unlinkEffect(pipeline);
   const unlink = () =>
     startTransition(async () => {
       const result = await unlinkPipeline(pipeline.id);
-      if (!result.ok) return void toast.error(result.error);
-      toast.success(`${pipeline.listName} unlinked`);
       onOpenChange(false);
       router.refresh();
+      if (!result.ok) return void toast.error(result.error);
+      toast.success(`${pipeline.listName} unlinked`, { description: effect.done });
     });
 
   return (
     <AlertDialog open={open} onOpenChange={(value) => !pending && onOpenChange(value)}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Stop syncing {pipeline.listName}?</AlertDialogTitle>
+          <AlertDialogTitle>Unlink {pipeline.listName}?</AlertDialogTitle>
           <AlertDialogDescription>
-            Its {pipeline.tasks === 1 ? "task stays" : `${pipeline.tasks} tasks stay`} in {pipeline.project?.name ?? "the project"} as
-            ordinary ReEdit tasks, and nothing changes in ClickUp. You can link the List again later.
+            {effect.warning} Logged time stays in the timesheets. Nothing changes in ClickUp, and linking the List again brings
+            the tasks back.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

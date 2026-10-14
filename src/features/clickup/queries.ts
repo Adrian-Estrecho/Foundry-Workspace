@@ -16,6 +16,8 @@ export type PipelineRow = {
   startStatus: string;
   statuses: ListStatus[];
   tasks: number;
+  /** Tasks made in ReEdit, which keep the project when the List is unlinked. */
+  ownTasks: number;
   lastSyncedAt: string | null;
 };
 
@@ -40,14 +42,19 @@ export async function getClickUpPage(workspaceId: string) {
     supabase.from("clients").select("id, company, contact_name").order("company"),
   ]);
 
-  let counts = new Map<string, number>();
+  // Per project: synced tasks, and ones made in ReEdit.
+  const counts = new Map<string, { synced: number; own: number }>();
   if (pipelines?.length) {
     const { data } = await supabase
       .from("tasks")
-      .select("project_id")
-      .in("project_id", pipelines.map((p) => p.project?.id).filter((id): id is string => Boolean(id)))
-      .not("clickup_task_id", "is", null);
-    counts = (data ?? []).reduce((map, t) => map.set(t.project_id!, (map.get(t.project_id!) ?? 0) + 1), new Map<string, number>());
+      .select("project_id, clickup_task_id")
+      .in("project_id", pipelines.map((p) => p.project?.id).filter((id): id is string => Boolean(id)));
+    for (const task of data ?? []) {
+      const count = counts.get(task.project_id!) ?? { synced: 0, own: 0 };
+      if (task.clickup_task_id) count.synced += 1;
+      else count.own += 1;
+      counts.set(task.project_id!, count);
+    }
   }
 
   let live: LiveUpdates = { state: "off", detail: null };
@@ -93,7 +100,8 @@ export async function getClickUpPage(workspaceId: string) {
         project: p.project,
         startStatus: p.start_status,
         statuses: (p.statuses as ListStatus[] | null) ?? [],
-        tasks: p.project ? (counts.get(p.project.id) ?? 0) : 0,
+        tasks: (p.project && counts.get(p.project.id)?.synced) || 0,
+        ownTasks: (p.project && counts.get(p.project.id)?.own) || 0,
         lastSyncedAt: p.last_synced_at,
       }),
     ),

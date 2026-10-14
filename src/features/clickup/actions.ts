@@ -19,6 +19,7 @@ import {
   loadSyncContext,
   recordError,
   refreshPipelineStatuses,
+  removeTasks,
   toListStatuses,
   type ImportCounts,
 } from "./sync";
@@ -440,26 +441,48 @@ export async function setPipelineStart(pipelineId: string, startStatus: string):
   return syncPipelineNow(pipeline.id);
 }
 
-/** Stops syncing one List. Its tasks stay in the project as ordinary ReEdit tasks. */
+/**
+ * Stops syncing one List and removes what it brought in: its tasks (with
+ * their files), and the project too unless it has tasks of its own. Nothing
+ * changes in ClickUp, and linking the List again brings the tasks back.
+ */
 export async function unlinkPipeline(pipelineId: string): Promise<ActionResult> {
   const found = await pipelineFor(pipelineId);
   if ("error" in found) return fail(found.error!);
   const { admin, pipeline, user } = found;
+  const ws = user.workspace.id;
 
-  const { data: tasks } = await admin
-    .from("tasks")
-    .select("id")
-    .eq("project_id", pipeline.project_id)
-    .not("clickup_task_id", "is", null);
-  const ids = (tasks ?? []).map((t) => t.id);
-  if (ids.length) {
-    await admin.from("clickup_outbox").delete().in("task_id", ids);
-    const { error } = await admin.from("tasks").update({ clickup_task_id: null }).in("id", ids);
-    if (error) return fail(error.message);
+  try {
+    // The link goes first, so a webhook arriving meanwhile can't bring a task back.
+    const { error } = await admin.from("clickup_pipelines").delete().eq("id", pipeline.id).eq("workspace_id", ws);
+    if (error) throw error;
+
+    const { data: tasks, error: tasksError } = await admin
+      .from("tasks")
+      .select("id")
+      .eq("workspace_id", ws)
+      .eq("project_id", pipeline.project_id)
+      .not("clickup_task_id", "is", null);
+    if (tasksError) throw tasksError;
+    await removeTasks(admin, (tasks ?? []).map((t) => t.id));
+
+    const { count, error: countError } = await admin
+      .from("tasks")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", ws)
+      .eq("project_id", pipeline.project_id);
+    if (countError) throw countError;
+    if (!count) {
+      const { error: projectError } = await admin.from("projects").delete().eq("workspace_id", ws).eq("id", pipeline.project_id);
+      if (projectError) throw projectError;
+    }
+  } catch (error) {
+    revalidateClickUp(pipeline.project_id);
+    revalidatePath("/", "layout");
+    return fail(`${pipeline.list_name} was removed only partly: ${errorMessage(error)}`);
   }
-  const { error } = await admin.from("clickup_pipelines").delete().eq("id", pipeline.id).eq("workspace_id", user.workspace.id);
-  if (error) return fail(error.message);
 
   revalidateClickUp(pipeline.project_id);
+  revalidatePath("/", "layout");
   return { ok: true };
 }
