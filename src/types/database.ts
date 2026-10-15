@@ -1364,6 +1364,48 @@ export type Database = {
           },
         ];
       };
+      link_portals: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          enabled: boolean;
+          last_viewed_at: string | null;
+          token: string;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          enabled?: boolean;
+          last_viewed_at?: string | null;
+          token: string;
+          workspace_id?: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          enabled?: boolean;
+          last_viewed_at?: string | null;
+          token?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "link_portals_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "link_portals_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: true;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       meeting_rsvps: {
         Row: {
           meeting_id: string;
