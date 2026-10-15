@@ -21,7 +21,7 @@ export default async function ClientLinksPage() {
 
   return (
     <>
-      <RealtimeRefresh channel="client-links" tables="clients,projects,task_attachments,task_comments" />
+      <RealtimeRefresh channel="client-links" tables="clients,projects" />
       <PageHeader
         title="Clients"
         description={linkCounts(clients)}

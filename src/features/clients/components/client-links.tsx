@@ -25,8 +25,9 @@ const SECTIONS: { kind: LinkKind; label: string; icon: LucideIcon }[] = [
 const PREVIEW = 5;
 
 /**
- * Every client's Frame.io and Drive links in one place, to open or copy.
- * `shared` is the links portal (no login): no stages and no ways into ReEdit.
+ * Each client's main Drive folder and their projects' Frame.io links, to
+ * open or copy. `shared` is the links portal (no login): no stages and no
+ * ways into ReEdit.
  */
 export function ClientLinks({ clients, shared = false }: { clients: LinkDirectoryClient[]; shared?: boolean }) {
   const [query, setQuery] = React.useState("");
@@ -46,7 +47,7 @@ export function ClientLinks({ clients, shared = false }: { clients: LinkDirector
         const links = client.links.filter(
           (link) =>
             (kind === "all" || link.kind === kind) &&
-            (!q || nameMatches || [link.title, link.source, link.url, link.projectName].some((value) => value?.toLowerCase().includes(q))),
+            (!q || nameMatches || [link.title, link.url].some((value) => value.toLowerCase().includes(q))),
         );
         // While filtering, a client with nothing to show drops out, unless it's the one searched for.
         if (filtering && links.length === 0 && !nameMatches) return [];
@@ -60,7 +61,7 @@ export function ClientLinks({ clients, shared = false }: { clients: LinkDirector
       <EmptyState
         icon={Link2Icon}
         title={shared ? "No links yet" : "No clients yet"}
-        description={shared ? "Each client's Drive folder and Frame.io links will show up here." : "Each client's Drive folder and Frame.io links show up here."}
+        description={shared ? "Each client's main folder and Frame.io link will show up here." : "Each client's main folder and Frame.io link show up here."}
         className="rounded-xl border bg-card"
       />
     );
@@ -74,7 +75,7 @@ export function ClientLinks({ clients, shared = false }: { clients: LinkDirector
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search clients, videos, links"
+            placeholder="Search clients, projects, links"
             aria-label="Search links"
             className="rounded-full bg-surface pl-9"
           />
@@ -155,7 +156,6 @@ function ClientLinksCard({
             section={section}
             links={client.links.filter((link) => link.kind === section.kind)}
             addHref={shared ? null : `/clients/${client.id}`}
-            showProject={client.projectCount > 1}
             expanded={expanded}
             shared={shared}
           />
@@ -169,16 +169,13 @@ function LinkSection({
   section,
   links,
   addHref,
-  showProject,
   expanded,
   shared,
 }: {
   section: (typeof SECTIONS)[number];
   links: ClientLink[];
-  /** Where to add a missing Drive folder. */
+  /** The client's page, where a missing link is added (folder there, Frame.io on a project). */
   addHref: string | null;
-  /** Name the project on task links, when the client has several. */
-  showProject: boolean;
   /** Show every link (while searching). */
   expanded: boolean;
   shared: boolean;
@@ -196,26 +193,20 @@ function LinkSection({
       </h3>
       {links.length === 0 ? (
         <p className="rounded-lg border border-dashed p-2.5 text-sm text-muted-foreground">
-          {section.kind === "drive" ? (
+          {section.kind === "drive" ? "No main folder yet." : "No Frame.io link yet."}
+          {addHref && (
             <>
-              No Drive folder yet.
-              {addHref && (
-                <>
-                  {" "}
-                  <Link href={addHref} className="text-foreground hover:text-primary hover:underline">
-                    Add one
-                  </Link>
-                </>
-              )}
+              {" "}
+              <Link href={addHref} className="text-foreground hover:text-primary hover:underline">
+                {section.kind === "drive" ? "Add one" : "Add one on a project"}
+              </Link>
             </>
-          ) : (
-            "No Frame.io links yet."
           )}
         </p>
       ) : (
         <ul className="grid grid-cols-1 gap-1.5">
           {visible.map((link) => (
-            <LinkRow key={link.url} link={link} icon={section.icon} showProject={showProject} shared={shared} />
+            <LinkRow key={link.url} link={link} icon={section.icon} shared={shared} />
           ))}
         </ul>
       )}
@@ -228,7 +219,7 @@ function LinkSection({
   );
 }
 
-function LinkRow({ link, icon: Icon, showProject, shared }: { link: ClientLink; icon: LucideIcon; showProject: boolean; shared: boolean }) {
+function LinkRow({ link, icon: Icon, shared }: { link: ClientLink; icon: LucideIcon; shared: boolean }) {
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(link.url);
@@ -237,8 +228,6 @@ function LinkRow({ link, icon: Icon, showProject, shared }: { link: ClientLink; 
       toast.error("Couldn't copy the link.");
     }
   };
-  const project = showProject && link.projectName !== link.title ? link.projectName : null;
-  const isTask = link.href?.startsWith("/tasks/");
 
   return (
     <li className="flex items-center gap-0.5 rounded-lg bg-surface pr-1.5 ring-1 ring-border transition-colors hover:bg-accent/50">
@@ -252,17 +241,15 @@ function LinkRow({ link, icon: Icon, showProject, shared }: { link: ClientLink; 
         <Icon className="size-5 shrink-0 text-primary" aria-hidden="true" />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium">{link.title}</span>
-          <span className="block truncate text-xs text-muted-foreground">
-            {[project, link.source, shortUrl(link.url)].filter(Boolean).join(" · ")}
-          </span>
+          <span className="block truncate text-xs text-muted-foreground">{shortUrl(link.url)}</span>
         </span>
       </a>
       <Button variant="ghost" size="icon-sm" onClick={copy} aria-label={`Copy link: ${link.title}`} title="Copy link">
         <CopyIcon />
       </Button>
       {link.href ? (
-        <Button asChild variant="ghost" size="icon-sm" title={isTask ? "Open the task" : "Open the project"}>
-          <Link href={link.href} aria-label={`Open ${isTask ? "task" : "project"}: ${link.title}`}>
+        <Button asChild variant="ghost" size="icon-sm" title="Open the project">
+          <Link href={link.href} aria-label={`Open project: ${link.title}`}>
             <ArrowRightIcon />
           </Link>
         </Button>
