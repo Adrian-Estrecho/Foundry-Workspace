@@ -7,7 +7,7 @@ import { CalendarDaysIcon, KanbanSquareIcon, ListIcon, PlusIcon, UsersIcon } fro
 import { PageHeader } from "@/components/shared/panel";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { RECENT_DONE_DAYS, TASK_VIEWS, type TaskStatusDef, type TaskView } from "../constants";
+import { TASK_VIEWS, type TaskStatusDef, type TaskView } from "../constants";
 import { taskFiltersQuery, type TaskFilters } from "../filters";
 import type { TaskAccess } from "../access";
 import type { TaskFormOptions, TaskSummary } from "../queries";
@@ -82,12 +82,7 @@ export function TaskViews({
 
       <div className={cn("transition-opacity", pending && "opacity-60")} aria-busy={pending}>
         {filters.view === "board" && (
-          <>
-            <TaskBoard tasks={tasks} emptyText={filters.q || filters.editor || filters.project ? "No matches" : undefined} />
-            {!filters.status && (
-              <p className="-mt-3 text-xs text-muted-foreground">Done shows tasks completed in the last {RECENT_DONE_DAYS} days.</p>
-            )}
-          </>
+          <TaskBoard tasks={tasks} emptyText={filters.q || filters.editor || filters.project ? "No matches" : undefined} />
         )}
         {filters.view === "list" && <TaskList tasks={tasks} />}
         {filters.view === "calendar" && <TaskCalendar tasks={tasks} month={month} onMonthChange={(m) => navigate({ month: m })} />}

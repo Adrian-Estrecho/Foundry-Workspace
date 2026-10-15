@@ -21,7 +21,6 @@ import { UserAvatar } from "@/components/shared/user-avatar";
 import { ProjectHeader } from "@/features/projects/components/project-header";
 import { ProjectTasks } from "@/features/projects/components/project-tasks";
 import { taskAccess } from "@/features/tasks/access";
-import { RECENT_DONE_DAYS } from "@/features/tasks/constants";
 import { projectAccess } from "@/features/projects/access";
 import { getClientChoices, getProjectDetail } from "@/features/projects/queries";
 import { requireUser } from "@/lib/auth";
@@ -183,7 +182,6 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
         tasks={tasks}
         access={taskAccess(user)}
         today={today}
-        doneSince={new Date(renderedAt - RECENT_DONE_DAYS * 86_400_000).toISOString()}
         options={data.taskOptions}
         statuses={data.taskStatuses}
       />

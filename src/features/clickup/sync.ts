@@ -390,10 +390,10 @@ export type SyncResult = "created" | "updated" | "unchanged" | "removed" | "skip
 /**
  * Brings one ClickUp task into ReEdit: creates it once it has reached its
  * pipeline's start status, keeps it up to date after that, and removes it
- * when it's archived or leaves the linked Lists. Subtasks aren't synced, and
- * a task that's already finished (a Done-stage status) isn't brought in; one
- * that finishes after it's here stays. A change made in ReEdit that hasn't
- * reached ClickUp yet wins over ClickUp's value for that field.
+ * when it's archived or leaves the linked Lists. Subtasks aren't synced. A
+ * task that's already finished comes in with the date ClickUp finished it.
+ * A change made in ReEdit that hasn't reached ClickUp yet wins over
+ * ClickUp's value for that field.
  */
 export async function syncTask(ctx: SyncContext, task: ClickUpTask): Promise<SyncResult> {
   const { admin } = ctx;
@@ -423,13 +423,16 @@ export async function syncTask(ctx: SyncContext, task: ClickUpTask): Promise<Syn
 
   if (!existing) {
     if (!reachedStart(pipeline, statusName)) return "skipped";
-    if (ctx.stages.get(statusId) === "done") return "skipped";
+    // A task already finished in ClickUp keeps that date, not today's. The
+    // database drops it for statuses outside the Done stage.
+    const finished = Number(task.date_done ?? task.date_closed ?? task.date_updated);
     const { error: insertError } = await admin.from("tasks").insert({
       ...fields,
       workspace_id: ws,
       project_id: pipeline.project_id,
       clickup_task_id: task.id,
       status_id: statusId,
+      completed_at: finished ? new Date(finished).toISOString() : null,
       position: await endOfColumn(admin, ws, statusId),
     });
     // Another event for the same task got there first.

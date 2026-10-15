@@ -19,7 +19,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { addDays } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import type { TaskAccess } from "../access";
-import { MY_TASK_VIEWS, priorityRank, RECENT_DONE_DAYS, type TaskStatusDef } from "../constants";
+import { MY_TASK_VIEWS, priorityRank, type TaskStatusDef } from "../constants";
 import { activeFilterCount, taskFiltersQuery, type TaskFilters } from "../filters";
 import type { TaskFormOptions, TaskSummary } from "../queries";
 import { DueChip, PriorityFlag, TaskStatusChip } from "./task-bits";
@@ -108,14 +108,7 @@ export function MyTasks({
       />
 
       <div className={cn("transition-opacity", pending && "opacity-60")} aria-busy={pending}>
-        {filters.view === "board" && (
-          <>
-            <TaskBoard tasks={tasks} emptyText={filtering ? "No matches" : undefined} />
-            {!filters.status && (
-              <p className="-mt-3 text-xs text-muted-foreground">Done shows tasks completed in the last {RECENT_DONE_DAYS} days.</p>
-            )}
-          </>
-        )}
+        {filters.view === "board" && <TaskBoard tasks={tasks} emptyText={filtering ? "No matches" : undefined} />}
         {filters.view === "calendar" && <TaskCalendar tasks={tasks} month={month} onMonthChange={(m) => navigate({ month: m })} />}
         {filters.view === "list" &&
           (tasks.length === 0 ? (

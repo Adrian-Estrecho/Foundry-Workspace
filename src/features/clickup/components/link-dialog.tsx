@@ -190,7 +190,7 @@ function SetupForm({
       }
       const { created, skipped } = result.data.counts;
       toast.success(`${setup.list.name} linked`, {
-        description: `${created} ${created === 1 ? "task" : "tasks"} brought in${skipped ? `, ${skipped} left in ClickUp (not started yet or already finished)` : ""}.`,
+        description: `${created} ${created === 1 ? "task" : "tasks"} brought in${skipped ? `, ${skipped} left in ClickUp (not started yet)` : ""}.`,
         action: { label: "Open project", onClick: () => router.push(`/projects/${result.data.projectId}`) },
       });
       onLinked();

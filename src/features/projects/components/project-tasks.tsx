@@ -11,24 +11,22 @@ import { Input } from "@/components/ui/input";
 import { ClickUpMark } from "@/features/clickup/components/clickup-mark";
 import { statusColor } from "@/features/statuses/constants";
 import type { TaskAccess } from "@/features/tasks/access";
-import { RECENT_DONE_DAYS, type TaskStatusDef } from "@/features/tasks/constants";
+import type { TaskStatusDef } from "@/features/tasks/constants";
 import type { TaskFormOptions, TaskSummary } from "@/features/tasks/queries";
 import { TaskBoard } from "@/features/tasks/components/task-board";
 import { TaskList } from "@/features/tasks/components/task-list";
 import { TaskStatusesButton, TaskWorkspace, useTaskWorkspace } from "@/features/tasks/components/task-workspace";
 
 /**
- * The project's tasks as a board or a list. Editors see only their own. The
- * board's Done column keeps to recent work; the list has everything. Search
- * and the status filter narrow both views; filtering by status also hides
- * the other board columns.
+ * The project's tasks as a board or a list. Editors see only their own.
+ * Search and the status filter narrow both views; filtering by status also
+ * hides the other board columns.
  */
 export function ProjectTasks({
   projectId,
   tasks,
   access,
   today,
-  doneSince,
   options,
   statuses,
 }: {
@@ -36,8 +34,6 @@ export function ProjectTasks({
   tasks: TaskSummary[];
   access: TaskAccess;
   today: string;
-  /** Done tasks completed before this (ISO time) stay off the board. */
-  doneSince: string;
   options: TaskFormOptions | null;
   statuses: TaskStatusDef[];
 }) {
@@ -63,12 +59,6 @@ export function ProjectTasks({
       ),
     [tasks, q, shownStatuses],
   );
-  const onBoard = React.useMemo(
-    () => matching.filter((t) => t.status !== "done" || (t.completedAt ?? "") >= doneSince),
-    [matching, doneSince],
-  );
-  const olderDone = matching.length - onBoard.length;
-  const doneMatching = matching.filter((t) => t.status === "done").length;
   // Fed by a ClickUp List: tasks are added in ClickUp.
   const fromClickUp = options?.projects.find((p) => p.id === projectId)?.clickup ?? false;
   const addTask = (label?: string) =>
@@ -145,23 +135,13 @@ export function ProjectTasks({
             />
           </div>
         ) : view === "board" ? (
-          <>
-            <TaskBoard
-              tasks={onBoard}
-              draft={{ projectId }}
-              addTasks={!fromClickUp}
-              only={shownStatuses}
-              emptyText={filtering ? "No matches" : undefined}
-            />
-            {olderDone > 0 && (
-              <p className="-mt-3 text-xs text-muted-foreground">
-                Done shows the last {RECENT_DONE_DAYS} days.{" "}
-                <button type="button" onClick={() => setView("list")} className="font-medium text-foreground hover:underline">
-                  See all {doneMatching} done in List
-                </button>
-              </p>
-            )}
-          </>
+          <TaskBoard
+            tasks={matching}
+            draft={{ projectId }}
+            addTasks={!fromClickUp}
+            only={shownStatuses}
+            emptyText={filtering ? "No matches" : undefined}
+          />
         ) : (
           <TaskList tasks={matching} />
         )}

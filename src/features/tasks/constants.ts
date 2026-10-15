@@ -30,9 +30,6 @@ export const TASK_PRIORITIES: { value: TaskPriority; label: string; rank: number
 
 export const priorityRank = (priority: TaskPriority) => TASK_PRIORITIES.find((p) => p.value === priority)?.rank ?? 0;
 
-/** Done tasks stay on the board and list this long, unless you filter for Done. */
-export const RECENT_DONE_DAYS = 14;
-
 export const TASK_VIEWS = [
   { value: "board", label: "Kanban" },
   { value: "list", label: "List" },

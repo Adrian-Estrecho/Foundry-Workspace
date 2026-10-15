@@ -21,6 +21,10 @@ export type ClickUpTask = {
   status: ClickUpStatus;
   priority: { priority: string } | null;
   due_date: string | null;
+  /** Epoch ms. Done is set on entering a done-type status, closed on a closed one; custom statuses set neither. */
+  date_done: string | null;
+  date_closed: string | null;
+  date_updated: string | null;
   assignees: ClickUpUser[];
   archived: boolean;
   /** Set on subtasks, which aren't synced. */

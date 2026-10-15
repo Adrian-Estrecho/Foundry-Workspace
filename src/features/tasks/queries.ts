@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 import { one } from "@/lib/utils";
 import { taskAccess } from "./access";
 import { monthGrid } from "./calendar";
-import { RECENT_DONE_DAYS, TASK_STAGES, taskStageLabel, type TaskPriority, type TaskStatus } from "./constants";
+import { TASK_STAGES, taskStageLabel, type TaskPriority, type TaskStatus } from "./constants";
 import type { TaskFilters } from "./filters";
 
 export type Person = { id: string; name: string; avatarUrl: string | null };
@@ -182,8 +182,7 @@ export async function getTaskFormOptions(): Promise<TaskFormOptions> {
 
 /**
  * Runs a task query narrowed by the URL filters, the same way on Tasks and My
- * Tasks. Without a status filter, Done keeps to recent work; the calendar
- * gets its month and By Editor only open work.
+ * Tasks. The calendar gets its month and By Editor only open work.
  */
 async function findTasks(query: ReturnType<typeof selectTasks>, filters: TaskFilters, today: string, month: string) {
   if (filters.client) {
@@ -211,9 +210,6 @@ async function findTasks(query: ReturnType<typeof selectTasks>, filters: TaskFil
   } else if (filters.view === "editors") {
     // Workload means open work.
     if (!filters.status) query = query.neq("status", "done");
-  } else if (!filters.status) {
-    const since = new Date(Date.now() - RECENT_DONE_DAYS * 86_400_000).toISOString();
-    query = query.or(`status.neq.done,completed_at.gte."${since}"`);
   }
 
   const { data, error } = await query;
