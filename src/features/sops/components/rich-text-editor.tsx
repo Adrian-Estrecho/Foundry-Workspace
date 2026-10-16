@@ -4,9 +4,17 @@ import * as React from "react";
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
+import { TableKit } from "@tiptap/extension-table";
+import { toast } from "sonner";
 import {
+  BetweenHorizontalEndIcon,
+  BetweenHorizontalStartIcon,
+  BetweenVerticalEndIcon,
+  BetweenVerticalStartIcon,
   BoldIcon,
+  CheckIcon,
   CodeIcon,
+  Columns3Icon,
   FootprintsIcon,
   Heading2Icon,
   Heading3Icon,
@@ -16,30 +24,54 @@ import {
   ListIcon,
   ListOrderedIcon,
   MinusIcon,
+  PanelTopIcon,
   PlusIcon,
   QuoteIcon,
   Redo2Icon,
+  Rows3Icon,
   StrikethroughIcon,
+  TableCellsMergeIcon,
+  TableCellsSplitIcon,
+  TableIcon,
+  Trash2Icon,
   UnderlineIcon,
   Undo2Icon,
+  WandSparklesIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { Json } from "@/types/database";
-import { InsertMenu, markPlaced } from "./sop-elements";
+import { describeImport, tidySop } from "../import";
+import { InsertMenu, insertElement, markPlaced } from "./sop-elements";
 import { Callout, LineHint, Step, Steps } from "./sop-nodes";
 
 /**
- * Rich text for SOPs: headings, lists, quotes, code and links, plus the SOP
- * blocks (step by step, checklists and callout boxes). The document is
- * Tiptap JSON, which SopContent renders for readers.
+ * Rich text for SOPs: headings, lists, quotes, code, links and tables, plus
+ * the SOP blocks (step by step, checklists and callout boxes). The document
+ * is Tiptap JSON, which SopContent renders for readers.
  */
 
-/** The SOP editor. Read the document with `editor.getJSON()` when saving. */
-export function useSopEditor({ initial, label }: { initial: Json | null; label: string }) {
+/**
+ * The SOP editor. Read the document with `editor.getJSON()` when saving.
+ * Pasted documents are laid out as an SOP (see import.ts); a file dropped on
+ * the page goes to `onFile`.
+ */
+export function useSopEditor({ initial, label, onFile }: { initial: Json | null; label: string; onFile?: (file: File) => void }) {
+  const fileHandler = React.useRef(onFile);
+  React.useEffect(() => {
+    fileHandler.current = onFile;
+  });
+
   return useEditor({
     immediatelyRender: false,
     extensions: [
@@ -59,6 +91,7 @@ export function useSopEditor({ initial, label }: { initial: Json | null; label: 
       Steps,
       Step,
       Callout,
+      TableKit.configure({ table: { resizable: false } }),
       LineHint,
     ],
     content: (initial as object | null) ?? "",
@@ -68,6 +101,21 @@ export function useSopEditor({ initial, label }: { initial: Json | null; label: 
         "aria-multiline": "true",
         role: "textbox",
         class: "sop-prose min-h-[28rem] px-5 py-5 outline-none sm:px-8 sm:py-7",
+      },
+      transformPastedHTML: (html) => {
+        // Copied from this editor: it's laid out already.
+        if (html.includes("data-pm-slice")) return html;
+        const { html: tidy, counts } = tidySop(html);
+        if (counts.images) toast(`${counts.images === 1 ? "A picture was" : "Pictures were"} left out: SOPs don't hold pictures yet.`);
+        return tidy;
+      },
+      handleDrop: (_view, event) => {
+        const file = event.dataTransfer?.files[0];
+        if (!file) return false;
+        // Otherwise the browser opens the file in place of the editor.
+        event.preventDefault();
+        fileHandler.current?.(file);
+        return true;
       },
     },
     onFocus: ({ editor }) => markPlaced(editor),
@@ -101,6 +149,7 @@ function Toolbar({ editor }: { editor: Editor }) {
       steps: editor.isActive("steps"),
       quote: editor.isActive("blockquote"),
       link: editor.isActive("link"),
+      table: editor.isActive("table"),
       canUndo: editor.can().undo(),
       canRedo: editor.can().redo(),
     }),
@@ -134,10 +183,95 @@ function Toolbar({ editor }: { editor: Editor }) {
       <Tool label="Numbered list" active={state.ordered} onClick={() => chain().toggleOrderedList().run()} icon={ListOrderedIcon} />
       <Tool label="Quote" active={state.quote} onClick={() => chain().toggleBlockquote().run()} icon={QuoteIcon} />
       <Tool label="Divider line" onClick={() => chain().setHorizontalRule().run()} icon={MinusIcon} />
+      {state.table ? <TableMenu editor={editor} /> : <Tool label="Table" onClick={() => insertElement(editor, "table")} icon={TableIcon} />}
       <Divider />
+      <Tool label="Tidy up: notes, steps and checklists as SOP blocks" onClick={() => tidyUp(editor)} icon={WandSparklesIcon} />
       <Tool label="Undo" shortcut="Ctrl+Z" disabled={!state.canUndo} onClick={() => chain().undo().run()} icon={Undo2Icon} />
       <Tool label="Redo" shortcut="Ctrl+Shift+Z" disabled={!state.canRedo} onClick={() => chain().redo().run()} icon={Redo2Icon} />
     </div>
+  );
+}
+
+/** Lays out what's on the page again, as an import would (for text pasted in before, say). */
+function tidyUp(editor: Editor) {
+  const { html, counts } = tidySop(editor.getHTML());
+  editor.chain().focus().setContent(html).run();
+  toast.success("Tidied up", { description: `${describeImport(counts)} Ctrl+Z puts it back.` });
+}
+
+/** Whether the table the cursor is in starts with a header row. */
+function inHeaderTable(editor: Editor) {
+  const { $from } = editor.state.selection;
+  for (let depth = $from.depth; depth > 0; depth--) {
+    const node = $from.node(depth);
+    if (node.type.name === "table") return node.firstChild?.firstChild?.type.name === "tableHeader";
+  }
+  return false;
+}
+
+/** Rows, columns, header and cells of the table the cursor is in. */
+function TableMenu({ editor }: { editor: Editor }) {
+  const state = useEditorState({
+    editor,
+    selector: ({ editor }) => ({ header: inHeaderTable(editor), canMerge: editor.can().mergeCells(), canSplit: editor.can().splitCell() }),
+  });
+  const chain = () => editor.chain().focus();
+
+  return (
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="ghost" size="icon-sm" aria-label="Table options" className="bg-accent text-foreground">
+              <TableIcon />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent>Table options</TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent
+        align="start"
+        className="w-56"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          editor.commands.focus();
+        }}
+      >
+        <DropdownMenuItem onSelect={() => chain().addRowBefore().run()}>
+          <BetweenHorizontalStartIcon /> Add row above
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => chain().addRowAfter().run()}>
+          <BetweenHorizontalEndIcon /> Add row below
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => chain().addColumnBefore().run()}>
+          <BetweenVerticalStartIcon /> Add column left
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => chain().addColumnAfter().run()}>
+          <BetweenVerticalEndIcon /> Add column right
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => chain().toggleHeaderRow().run()}>
+          <PanelTopIcon /> <span className="flex-1">Header row</span>
+          {state.header && <CheckIcon className="text-muted-foreground" />}
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={!state.canMerge} onSelect={() => chain().mergeCells().run()}>
+          <TableCellsMergeIcon /> Merge cells
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={!state.canSplit} onSelect={() => chain().splitCell().run()}>
+          <TableCellsSplitIcon /> Split cell
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => chain().deleteRow().run()}>
+          <Rows3Icon /> Delete row
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => chain().deleteColumn().run()}>
+          <Columns3Icon /> Delete column
+        </DropdownMenuItem>
+        <DropdownMenuItem variant="destructive" onSelect={() => chain().deleteTable().run()}>
+          <Trash2Icon /> Delete table
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

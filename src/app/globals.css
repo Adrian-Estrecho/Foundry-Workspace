@@ -442,29 +442,29 @@
     padding: 0;
     list-style: none;
   }
-  .sop-prose li[data-type="taskItem"] {
+  .sop-prose ul[data-type="taskList"] > li {
     display: flex;
     align-items: flex-start;
     gap: 0.7em;
     margin: 0.3em 0;
   }
-  .sop-prose li[data-type="taskItem"] > label {
+  .sop-prose ul[data-type="taskList"] > li > label {
     display: flex;
     flex: none;
     align-items: center;
     height: 1.7em;
   }
-  .sop-prose li[data-type="taskItem"] > label > span {
+  .sop-prose ul[data-type="taskList"] > li > label > span {
     display: none;
   }
-  .sop-prose li[data-type="taskItem"] > div {
+  .sop-prose ul[data-type="taskList"] > li > div {
     flex: 1;
     min-width: 0;
   }
-  .sop-prose li[data-type="taskItem"] > div > p {
+  .sop-prose ul[data-type="taskList"] > li > div > p {
     margin: 0;
   }
-  .sop-prose li[data-type="taskItem"] input[type="checkbox"] {
+  .sop-prose ul[data-type="taskList"] > li input[type="checkbox"] {
     display: grid;
     place-content: center;
     width: 1.05em;
@@ -478,7 +478,7 @@
       background-color 0.15s,
       border-color 0.15s;
   }
-  .sop-prose li[data-type="taskItem"] input[type="checkbox"]::after {
+  .sop-prose ul[data-type="taskList"] > li input[type="checkbox"]::after {
     content: "";
     width: 0.3em;
     height: 0.55em;
@@ -488,18 +488,18 @@
     transform: rotate(45deg) scale(0);
     transition: transform 0.15s;
   }
-  .sop-prose li[data-type="taskItem"] input[type="checkbox"]:checked {
+  .sop-prose ul[data-type="taskList"] > li input[type="checkbox"]:checked {
     border-color: var(--primary);
     background: var(--primary);
   }
-  .sop-prose li[data-type="taskItem"] input[type="checkbox"]:checked::after {
+  .sop-prose ul[data-type="taskList"] > li input[type="checkbox"]:checked::after {
     transform: rotate(45deg) scale(1);
   }
-  .sop-prose li[data-type="taskItem"] input[type="checkbox"]:focus-visible {
+  .sop-prose ul[data-type="taskList"] > li input[type="checkbox"]:focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
   }
-  .sop-prose li[data-type="taskItem"]:has(> label input:checked) > div {
+  .sop-prose ul[data-type="taskList"] > li:has(> label input:checked) > div {
     color: var(--muted-foreground);
     text-decoration: line-through;
   }
@@ -540,6 +540,46 @@
   .sop-callout-body > :last-child,
   .sop-callout-body > [data-node-view-content-react] > :last-child {
     margin-bottom: 0;
+  }
+
+  /* Tables (the editor wraps them in .tableWrapper, the reader in .sop-table) */
+  .sop-prose :is(.tableWrapper, .sop-table) {
+    margin: 1.25em 0;
+    overflow-x: auto;
+  }
+  .sop-prose table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9em;
+    line-height: 1.55;
+  }
+  .sop-prose :is(th, td) {
+    position: relative;
+    min-width: 7em;
+    border: 1px solid color-mix(in oklab, var(--foreground) 14%, transparent);
+    padding: 0.5em 0.75em;
+    text-align: left;
+    vertical-align: top;
+  }
+  .sop-prose th {
+    background: var(--surface-strong);
+    font-weight: 600;
+  }
+  .sop-prose :is(th, td) > :first-child {
+    margin-top: 0;
+  }
+  .sop-prose :is(th, td) > :last-child {
+    margin-bottom: 0;
+  }
+  .sop-prose :is(th, td) > p {
+    margin: 0.4em 0;
+  }
+  .sop-prose .selectedCell::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: color-mix(in oklab, var(--primary) 14%, transparent);
+    pointer-events: none;
   }
 
   /* Editor only: hints in empty lines, and a selected block. */

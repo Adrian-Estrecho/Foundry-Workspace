@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeftIcon, EyeIcon, Loader2Icon, MonitorIcon, PencilIcon, SaveIcon, SmartphoneIcon, Trash2Icon } from "lucide-react";
+import { ArrowLeftIcon, EyeIcon, FileUpIcon, Loader2Icon, MonitorIcon, PencilIcon, SaveIcon, SmartphoneIcon, Trash2Icon } from "lucide-react";
 import { FormRow, NativeSelect, submitWith } from "@/components/shared/form";
 import { Segmented } from "@/components/shared/segmented";
 import {
@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { Constants, type Enums, type Json } from "@/types/database";
 import { createSop, deleteSop, updateSop } from "../actions";
 import { SOP_CATEGORY_LABEL } from "../constants";
+import { describeImport, readDocx, tidySop, type ImportResult } from "../import";
 import { SopDocument, type SopWorkspace } from "./sop-document";
 import { ElementPalette } from "./sop-elements";
 import { SopEditor, useSopEditor } from "./rich-text-editor";
@@ -38,14 +39,17 @@ type Sop = {
 };
 
 type Preview = { title: string; category: Enums<"sop_category">; content: Json; required: boolean; draft: boolean };
+type Imported = ImportResult & { name: string };
 
 const EMPTY_DOC = { type: "doc", content: [] };
 
 /**
  * Write or edit an SOP, full screen: elements to add on the left (steps,
- * checklists, notes, do's and don'ts), the page in the middle. Preview shows
- * it as editors read it, as a page, on a desktop or a phone. Required SOPs
- * are part of every editor's onboarding; drafts stay hidden from editors.
+ * checklists, notes, do's and don'ts, tables), the page in the middle.
+ * A Word file or Google Doc can be imported (or dropped on the page) and is
+ * laid out as an SOP. Preview shows it as editors read it, as a page, on a
+ * desktop or a phone. Required SOPs are part of every editor's onboarding;
+ * drafts stay hidden from editors.
  */
 export function SopForm({ sop, workspace }: { sop?: Sop; workspace: SopWorkspace }) {
   const router = useRouter();
@@ -58,9 +62,48 @@ export function SopForm({ sop, workspace }: { sop?: Sop; workspace: SopWorkspace
   const [mode, setMode] = React.useState<"edit" | "preview">("edit");
   const [device, setDevice] = React.useState<"desktop" | "phone">("desktop");
   const [preview, setPreview] = React.useState<Preview | null>(null);
-  const editor = useSopEditor({ initial: sop?.content ?? null, label: "SOP content" });
+  const fileRef = React.useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = React.useState(false);
+  const [imported, setImported] = React.useState<Imported | null>(null);
+  const editor = useSopEditor({ initial: sop?.content ?? null, label: "SOP content", onFile: (file) => void importFile(file) });
 
   const currentContent = () => (editor?.getJSON() ?? sop?.content ?? EMPTY_DOC) as Json;
+
+  /** Reads a Word file (Google Docs: File → Download → .docx) and lays it out as an SOP. */
+  const importFile = async (file: File) => {
+    if (!editor || importing) return;
+    if (!/\.docx$/i.test(file.name)) {
+      return void toast.error("Import a Word file (.docx)", { description: "From Google Docs: File → Download → Microsoft Word (.docx)." });
+    }
+    setImporting(true);
+    try {
+      const found = { ...tidySop(await readDocx(file), { findTitle: true }), name: file.name };
+      // With something written already, ask whether to replace it.
+      if (editor.isEmpty) applyImport(found, "replace");
+      else setImported(found);
+    } catch {
+      toast.error("Couldn't read that file", { description: "Check it's a Word document (.docx), not an older .doc, and try again." });
+    } finally {
+      setImporting(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const applyImport = (found: Imported, how: "replace" | "append") => {
+    if (!editor) return;
+    if (how === "replace") editor.chain().setContent(found.html).focus("start").scrollIntoView().run();
+    else editor.chain().focus().insertContentAt(editor.state.doc.content.size, found.html).scrollIntoView().run();
+    // The document's title, or its file name, when the SOP has none yet.
+    const title = formRef.current?.elements.namedItem("title");
+    if (title instanceof HTMLInputElement && !title.value.trim()) {
+      title.value = (found.title ?? found.name.replace(/\.docx$/i, "").replace(/_+/g, " ")).slice(0, 160);
+    }
+    setImported(null);
+    const pictures = found.counts.images
+      ? ` ${found.counts.images === 1 ? "A picture was" : `${found.counts.images} pictures were`} left out: SOPs don't hold pictures yet.`
+      : "";
+    toast.success(`Imported ${found.name}`, { description: `${describeImport(found.counts)}${pictures} Check it, then save.` });
+  };
 
   const changeMode = (next: "edit" | "preview") => {
     if (next === mode || !formRef.current) return;
@@ -127,6 +170,30 @@ export function SopForm({ sop, workspace }: { sop?: Sop; workspace: SopWorkspace
           <h1 className="font-heading text-lg leading-tight font-semibold tracking-tight">{sop ? "Edit SOP" : "New SOP"}</h1>
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          {mode === "edit" && (
+            <>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                hidden
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void importFile(file);
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!editor || importing}
+                onClick={() => fileRef.current?.click()}
+                title="A Word file, or a Google Doc downloaded as .docx. It's laid out as an SOP."
+              >
+                {importing ? <Loader2Icon className="animate-spin" /> : <FileUpIcon />}
+                Import .docx
+              </Button>
+            </>
+          )}
           <Segmented
             label="Mode"
             value={mode}
@@ -190,7 +257,7 @@ export function SopForm({ sop, workspace }: { sop?: Sop; workspace: SopWorkspace
                 <p className="text-sm font-medium">Content</p>
                 <p className="text-xs text-muted-foreground">
                   <span className="hidden lg:inline">Add steps, checklists and notes from the left. </span>
-                  Preview shows it as editors read it.
+                  Paste or import a Google Doc or Word file and it&apos;s laid out as an SOP.
                 </p>
               </div>
               <SopEditor editor={editor} />
@@ -244,6 +311,29 @@ export function SopForm({ sop, workspace }: { sop?: Sop; workspace: SopWorkspace
           )}
         </div>
       </div>
+
+      <AlertDialog open={!!imported} onOpenChange={(open) => !open && setImported(null)}>
+        <AlertDialogContent
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            editor?.commands.focus();
+          }}
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle>Replace what&apos;s here?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This SOP already has content. Replace it with {imported?.name}, or add the document at the end. Ctrl+Z undoes either.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="outline" onClick={() => imported && applyImport(imported, "append")}>
+              Add at the end
+            </AlertDialogAction>
+            <AlertDialogAction onClick={() => imported && applyImport(imported, "replace")}>Replace</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>

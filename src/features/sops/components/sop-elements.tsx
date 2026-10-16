@@ -14,6 +14,7 @@ import {
   MinusIcon,
   PlusIcon,
   QuoteIcon,
+  TableIcon,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -39,6 +40,7 @@ type ElementKey =
   | "checklist"
   | "bulleted"
   | "numbered"
+  | "table"
   | CalloutVariant
   | "quote"
   | "code"
@@ -56,6 +58,7 @@ const ELEMENTS: Record<ElementKey, Element> = {
   checklist: { label: "Checklist", description: "Things to tick off", icon: ListChecksIcon },
   bulleted: { label: "Bulleted list", description: "Points in no set order", icon: ListIcon },
   numbered: { label: "Numbered list", description: "A simple numbered list", icon: ListOrderedIcon },
+  table: { label: "Table", description: "Rows and columns, like specs or rates", icon: TableIcon },
   note: callout("note"),
   tip: callout("tip"),
   guideline: callout("guideline"),
@@ -70,7 +73,7 @@ const ELEMENTS: Record<ElementKey, Element> = {
 };
 
 const GROUPS: { title: string; keys: ElementKey[] }[] = [
-  { title: "Structure", keys: ["heading", "subheading", "steps", "checklist", "bulleted", "numbered"] },
+  { title: "Structure", keys: ["heading", "subheading", "steps", "checklist", "bulleted", "numbered", "table"] },
   { title: "Callouts", keys: ["note", "tip", "guideline", "important", "warning"] },
   { title: "Rules", keys: ["do", "dont"] },
   { title: "More", keys: ["quote", "code", "divider"] },
@@ -83,6 +86,10 @@ const box = (variant: CalloutVariant, ...content: JSONContent[]): JSONContent =>
 const h2 = (value: string): JSONContent => ({ type: "heading", attrs: { level: 2 }, content: [text(value)] });
 const step = (title: string, detail: string): JSONContent => ({ type: "step", content: [p(text(title, true), text(` ${detail}`))] });
 const check = (value: string): JSONContent => ({ type: "taskItem", attrs: { checked: false }, content: [p(text(value))] });
+const row = (cell: "tableHeader" | "tableCell"): JSONContent => ({ type: "tableRow", content: [1, 2, 3].map(() => ({ type: cell, content: [p()] })) });
+
+/** Three columns, a header row and two rows to fill. */
+const TABLE: JSONContent = { type: "table", content: [row("tableHeader"), row("tableCell"), row("tableCell")] };
 
 /** A starting point for a whole SOP, written for an editing team. */
 const OUTLINE: JSONContent[] = [
@@ -121,6 +128,8 @@ function contentFor(key: ElementKey): JSONContent | JSONContent[] {
       return { type: "bulletList", content: [{ type: "listItem", content: [p()] }] };
     case "numbered":
       return { type: "orderedList", content: [{ type: "listItem", content: [p()] }] };
+    case "table":
+      return [TABLE, p()];
     case "quote":
       return { type: "blockquote", content: [p()] };
     case "code":
@@ -159,12 +168,13 @@ export function insertElement(editor: Editor, key: ElementKey) {
     start = end = selection.to;
   }
   const replace = target?.type.name === "paragraph" && target.content.size === 0;
-  editor
+  const chain = editor
     .chain()
     .focus()
-    .insertContentAt(replace ? { from: start, to: end } : end, contentFor(key))
-    .scrollIntoView()
-    .run();
+    .insertContentAt(replace ? { from: start, to: end } : end, contentFor(key));
+  // Start typing in a new table's first cell (inside table, row, cell and paragraph).
+  if (key === "table") chain.setTextSelection((replace ? start : end) + 4);
+  chain.scrollIntoView().run();
 }
 
 function ElementIcon({ element, className }: { element: Element; className?: string }) {

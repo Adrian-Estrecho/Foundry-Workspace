@@ -115,6 +115,27 @@ function renderNode(node: Node, key: React.Key, context: Context): React.ReactNo
         </aside>
       );
     }
+    case "table":
+      // Scrolls sideways on a phone rather than squeezing its columns.
+      return (
+        <div key={key} className="sop-table">
+          <table>
+            <tbody>{children}</tbody>
+          </table>
+        </div>
+      );
+    case "tableRow":
+      return <tr key={key}>{children}</tr>;
+    case "tableHeader":
+    case "tableCell": {
+      const Cell = node.type === "tableHeader" ? "th" : "td";
+      const span = (value: unknown) => (Number.isInteger(value) && Number(value) > 1 ? Number(value) : undefined);
+      return (
+        <Cell key={key} colSpan={span(node.attrs?.colspan)} rowSpan={span(node.attrs?.rowspan)}>
+          {children}
+        </Cell>
+      );
+    }
     case "blockquote":
       return <blockquote key={key}>{children}</blockquote>;
     case "codeBlock":
