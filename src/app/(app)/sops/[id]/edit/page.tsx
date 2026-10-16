@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SopForm } from "@/features/sops/components/sop-form";
-import { getSopForEdit } from "@/features/sops/queries";
+import { getSopCategories, getSopForEdit, getSopReaders } from "@/features/sops/queries";
 import { workspaceLogoUrl } from "@/features/workspaces/constants";
 import { requirePermission } from "@/lib/auth";
 
@@ -13,12 +13,14 @@ export default async function EditSopPage(props: PageProps<"/sops/[id]/edit">) {
   const user = await requirePermission("sops.manage");
   const { id } = await props.params;
   if (!UUID.test(id)) notFound();
-  const sop = await getSopForEdit(id);
+  const [sop, readers, categories] = await Promise.all([getSopForEdit(id), getSopReaders(user), getSopCategories()]);
   if (!sop) notFound();
   return (
     <SopForm
       key={sop.updated_at}
       sop={sop}
+      readers={readers}
+      categories={categories}
       workspace={{ name: user.workspace.name, logoUrl: workspaceLogoUrl(user.workspace.logo_path) }}
     />
   );

@@ -6,40 +6,42 @@ import { RealtimeRefresh } from "@/components/shared/realtime-refresh";
 import { Button } from "@/components/ui/button";
 import { SopsStep } from "@/features/editors/components/onboarding/sops-step";
 import { SopAdminList } from "@/features/sops/components/sop-admin-list";
-import { SOP_CATEGORY_LABEL } from "@/features/sops/constants";
+import { SopCategoriesButton } from "@/features/sops/components/sop-categories";
 import { getSopAdminList, getSopLibrary } from "@/features/sops/queries";
 import { workspaceLogoUrl } from "@/features/workspaces/constants";
 import { can, requireUser } from "@/lib/auth";
-import { Constants } from "@/types/database";
 
 export const metadata: Metadata = { title: "SOPs" };
 
 /**
- * How the workspace works, by category. Editors (onboarding ones included)
+ * How the workspace works, by the workspace's own categories (in their order). Editors (onboarding ones included)
  * read and acknowledge them; required ones are also a step in onboarding.
- * Admins (and people allowed to) write, edit and publish them, and see who
- * has read each one.
+ * Admins (and people allowed to) write, edit and publish them, choose who
+ * can see each one, and see who has read it.
  */
 export default async function SopsPage() {
   const user = await requireUser({ allowOnboarding: true });
   const workspace = { name: user.workspace.name, logoUrl: workspaceLogoUrl(user.workspace.logo_path) };
 
   if (can(user, "sops.manage")) {
-    const { sops, teamSize, renderedAt } = await getSopAdminList();
-    const categories = Constants.public.Enums.sop_category.filter((category) => sops.some((sop) => sop.category === category));
+    const { sops, categories: all, renderedAt } = await getSopAdminList(user);
+    const categories = all.filter((category) => sops.some((sop) => sop.categoryId === category.id));
     return (
       <>
-        <RealtimeRefresh channel="sops" tables="sops,sop_acknowledgments" />
+        <RealtimeRefresh channel="sops" tables="sops,sop_acknowledgments,sop_categories" />
         <div className="mx-auto grid max-w-3xl gap-5">
           <PageHeader
             title="SOPs"
             description={`How ${user.workspace.name} works. Required SOPs are part of every new editor's onboarding.`}
             actions={
-              <Button asChild>
-                <Link href="/sops/new">
-                  <PlusIcon /> New SOP
-                </Link>
-              </Button>
+              <>
+                <SopCategoriesButton />
+                <Button asChild>
+                  <Link href="/sops/new">
+                    <PlusIcon /> New SOP
+                  </Link>
+                </Button>
+              </>
             }
           />
           {categories.length === 0 ? (
@@ -59,10 +61,9 @@ export default async function SopsPage() {
             </div>
           ) : (
             categories.map((category) => (
-              <Panel key={category} title={SOP_CATEGORY_LABEL[category]}>
+              <Panel key={category.id} title={category.name}>
                 <SopAdminList
-                  sops={sops.filter((sop) => sop.category === category)}
-                  teamSize={teamSize}
+                  sops={sops.filter((sop) => sop.categoryId === category.id)}
                   workspace={workspace}
                   renderedAt={renderedAt}
                 />
@@ -74,12 +75,12 @@ export default async function SopsPage() {
     );
   }
 
-  const { sops, renderedAt } = await getSopLibrary(user);
-  const categories = Constants.public.Enums.sop_category.filter((category) => sops.some((sop) => sop.category === category));
+  const { sops, categories: all, renderedAt } = await getSopLibrary(user);
+  const categories = all.filter((category) => sops.some((sop) => sop.categoryId === category.id));
 
   return (
     <>
-      <RealtimeRefresh channel="sops" tables="sops,sop_acknowledgments" />
+      <RealtimeRefresh channel="sops" tables="sops,sop_acknowledgments,sop_categories" />
       <div className="mx-auto grid max-w-3xl gap-5">
         <PageHeader title="SOPs" description={`How ${user.workspace.name} works. Mark each one as read once you've been through it.`} />
         {categories.length === 0 ? (
@@ -88,9 +89,9 @@ export default async function SopsPage() {
           </div>
         ) : (
           categories.map((category) => (
-            <Panel key={category} title={SOP_CATEGORY_LABEL[category]}>
+            <Panel key={category.id} title={category.name}>
               <SopsStep
-                sops={sops.filter((sop) => sop.category === category)}
+                sops={sops.filter((sop) => sop.categoryId === category.id)}
                 workspace={workspace}
                 renderedAt={renderedAt}
                 canAcknowledge

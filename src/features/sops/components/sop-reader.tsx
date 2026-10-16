@@ -4,14 +4,13 @@ import * as React from "react";
 import { BookOpenIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import type { Enums, Json } from "@/types/database";
-import { SOP_CATEGORY_LABEL } from "../constants";
+import type { Json } from "@/types/database";
 import { SopDocument, type SopWorkspace } from "./sop-document";
 
 export type ReaderSop = {
   id: string;
   title: string;
-  category: Enums<"sop_category">;
+  category: string;
   content: Json;
   required?: boolean;
   draft?: boolean;
@@ -44,7 +43,7 @@ export function SopReader({
             <BookOpenIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             <div className="min-w-0 flex-1">
               <DialogTitle className="truncate text-sm font-medium">{sop.title}</DialogTitle>
-              <DialogDescription className="truncate text-xs">{SOP_CATEGORY_LABEL[sop.category]}</DialogDescription>
+              <DialogDescription className="truncate text-xs">{sop.category}</DialogDescription>
             </div>
             <DialogClose asChild>
               <Button variant="ghost" size="icon-sm" aria-label="Close">

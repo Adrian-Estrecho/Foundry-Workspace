@@ -7,15 +7,14 @@ import { BookOpenIcon, CheckCircle2Icon, CheckIcon, Loader2Icon } from "lucide-r
 import { Button } from "@/components/ui/button";
 import type { SopWorkspace } from "@/features/sops/components/sop-document";
 import { SopReader } from "@/features/sops/components/sop-reader";
-import { SOP_CATEGORY_LABEL } from "@/features/sops/constants";
 import { timeAgo } from "@/lib/dates";
-import type { Enums, Json } from "@/types/database";
+import type { Json } from "@/types/database";
 import { acknowledgeSop } from "../../onboarding-actions";
 
 type Sop = {
   id: string;
   title: string;
-  category: Enums<"sop_category">;
+  category: string;
   content: Json;
   acknowledgedAt: string | null;
   /** Shown as a tag in the SOP library (everything in onboarding is required). */
@@ -82,7 +81,7 @@ export function SopsStep({
                 )}
               </span>
               <span className="block text-xs text-muted-foreground">
-                {SOP_CATEGORY_LABEL[sop.category]}
+                {sop.category}
                 {sop.acknowledgedAt && ` · Read ${timeAgo(sop.acknowledgedAt, renderedAt)}`}
               </span>
             </span>

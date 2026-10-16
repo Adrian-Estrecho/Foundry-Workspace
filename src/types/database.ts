@@ -2130,44 +2130,95 @@ export type Database = {
           },
         ];
       };
+      sop_categories: {
+        Row: {
+          created_at: string;
+          id: string;
+          name: string;
+          position: number;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          name: string;
+          position?: number;
+          workspace_id?: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          name?: string;
+          position?: number;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "sop_categories_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       sops: {
         Row: {
           category: Database["public"]["Enums"]["sop_category"];
+          category_id: string | null;
           content: NonNullable<Json>;
           created_at: string;
           created_by: string | null;
           id: string;
           is_published: boolean;
           is_required: boolean;
+          shared_with: string[];
           title: string;
           updated_at: string;
+          visible_to_admins: boolean;
+          visible_to_editors: boolean;
           workspace_id: string;
         };
         Insert: {
-          category: Database["public"]["Enums"]["sop_category"];
+          category?: Database["public"]["Enums"]["sop_category"];
+          category_id?: string | null;
           content?: NonNullable<Json>;
           created_at?: string;
           created_by?: string | null;
           id?: string;
           is_published?: boolean;
           is_required?: boolean;
+          shared_with?: string[];
           title: string;
           updated_at?: string;
+          visible_to_admins?: boolean;
+          visible_to_editors?: boolean;
           workspace_id?: string;
         };
         Update: {
           category?: Database["public"]["Enums"]["sop_category"];
+          category_id?: string | null;
           content?: NonNullable<Json>;
           created_at?: string;
           created_by?: string | null;
           id?: string;
           is_published?: boolean;
           is_required?: boolean;
+          shared_with?: string[];
           title?: string;
           updated_at?: string;
+          visible_to_admins?: boolean;
+          visible_to_editors?: boolean;
           workspace_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "sops_category_fkey";
+            columns: ["workspace_id", "category_id"];
+            isOneToOne: false;
+            referencedRelation: "sop_categories";
+            referencedColumns: ["workspace_id", "id"];
+          },
           {
             foreignKeyName: "sops_created_by_fkey";
             columns: ["created_by"];
@@ -2978,6 +3029,7 @@ export type Database = {
         }[];
       };
       can_manage_task: { Args: { p_task_id: string }; Returns: boolean };
+      can_read_sop: { Args: { p_sop_id: string; p_user_id: string }; Returns: boolean };
       can_see_profile: { Args: { p_user_id: string }; Returns: boolean };
       claim_clickup_items: {
         Args: { p_limit?: number };
@@ -3038,6 +3090,7 @@ export type Database = {
         Args: { p_move_to?: string; p_status_id: string };
         Returns: undefined;
       };
+      delete_sop_category: { Args: { p_id: string; p_move_to: string }; Returns: undefined };
       delete_task_status: { Args: { p_move_to?: string; p_status_id: string }; Returns: undefined };
       due_clickup_pushes: {
         Args: { p_limit?: number };
@@ -3090,6 +3143,10 @@ export type Database = {
       is_project_member: { Args: { p_project_id: string }; Returns: boolean };
       is_reserved_slug: { Args: { p_slug: string }; Returns: boolean };
       is_task_assignee: { Args: { p_task_id: string }; Returns: boolean };
+      legacy_sop_category_name: {
+        Args: { p_category: Database["public"]["Enums"]["sop_category"] };
+        Returns: string;
+      };
       mark_announcements_seen: { Args: Record<PropertyKey, never>; Returns: undefined };
       mark_thread_read: { Args: { p_thread_id: string }; Returns: undefined };
       my_editor_for_update: {
@@ -3180,6 +3237,7 @@ export type Database = {
       };
       reject_member: { Args: { p_user_id: string }; Returns: undefined };
       remove_member: { Args: { p_user_id: string }; Returns: undefined };
+      reorder_sop_categories: { Args: { p_ids: string[] }; Returns: undefined };
       reorder_statuses: { Args: { p_ids: string[]; p_kind: string }; Returns: undefined };
       request_clickup_push: { Args: Record<PropertyKey, never>; Returns: undefined };
       request_notification_emails: { Args: Record<PropertyKey, never>; Returns: undefined };

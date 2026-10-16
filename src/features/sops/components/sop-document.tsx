@@ -1,8 +1,7 @@
 import { WorkspaceTile } from "@/features/workspaces/components/workspace-switcher";
 import { cn } from "@/lib/utils";
-import type { Enums, Json } from "@/types/database";
+import type { Json } from "@/types/database";
 import { outlineOf, readingMinutes } from "../blocks";
-import { SOP_CATEGORY_LABEL } from "../constants";
 import { SopContent } from "./sop-content";
 
 export type SopWorkspace = { name: string; logoUrl: string | null };
@@ -24,7 +23,8 @@ export function SopDocument({
   className,
 }: {
   title: string;
-  category: Enums<"sop_category">;
+  /** The category's name. */
+  category: string;
   content: Json;
   required?: boolean;
   draft?: boolean;
@@ -64,7 +64,7 @@ export function SopDocument({
             </span>
           </div>
 
-          <p className="mt-10 text-xs font-semibold tracking-[0.16em] text-primary uppercase @lg:mt-14">{SOP_CATEGORY_LABEL[category]}</p>
+          <p className="mt-10 text-xs font-semibold tracking-[0.16em] text-primary uppercase @lg:mt-14">{category}</p>
           <h1 className="mt-3 font-serif text-[1.875rem] leading-[1.15] font-semibold tracking-tight text-balance @lg:text-[2.5rem]">
             {title.trim() || "Untitled SOP"}
           </h1>

@@ -5,11 +5,12 @@ import { z } from "zod";
 import { fail, fieldErrorsOf, type ActionResult } from "@/lib/action-result";
 import { requirePermission } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { Constants, type Json } from "@/types/database";
+import type { Json } from "@/types/database";
 
 /**
  * Writing SOPs (admins). The content is the editor's document (Tiptap
  * JSON); SopContent renders it as React, so nothing in it runs as HTML.
+ * Who can see each one is checked by the database (can_read_sop).
  */
 
 const MAX_CONTENT_CHARS = 200_000;
@@ -30,11 +31,32 @@ const document = z
     return z.NEVER;
   });
 
+/** A form flag that defaults to on, so a form sent without it can't hide an SOP by accident. */
+const flagOn = z.preprocess((value) => value === undefined || value === "on" || value === "true", z.boolean());
+
+/** The people an SOP is shared with by name, as a JSON list of user ids. */
+const people = z
+  .string()
+  .default("[]")
+  .transform((value, ctx) => {
+    try {
+      const ids: unknown = JSON.parse(value);
+      if (Array.isArray(ids) && ids.length <= 1000 && ids.every((id) => z.uuid().safeParse(id).success)) return [...new Set(ids as string[])];
+    } catch {
+      // fall through
+    }
+    ctx.addIssue({ code: "custom", message: "Choose who can see it again." });
+    return z.NEVER;
+  });
+
 const sopSchema = z.object({
   title: z.string().trim().min(2, "Give the SOP a title.").max(160, "Keep the title under 160 characters."),
-  category: z.enum(Constants.public.Enums.sop_category, { error: "Pick a category." }),
+  category_id: z.uuid({ error: "Pick a category." }),
   is_required: z.preprocess((value) => value === "on" || value === "true", z.boolean()),
   is_published: z.preprocess((value) => value === "on" || value === "true", z.boolean()),
+  visible_to_admins: flagOn,
+  visible_to_editors: flagOn,
+  shared_with: people,
   content: document,
 });
 
@@ -51,6 +73,7 @@ export async function createSop(formData: FormData): Promise<ActionResult<{ id: 
 
   const supabase = await createClient();
   const { data, error } = await supabase.from("sops").insert({ ...parsed.data, created_by: user.id }).select("id").single();
+  if (error?.code === "23503") return fail("That category was just removed. Pick another.", { category_id: "Pick another category." });
   if (error) return fail("Couldn't save the SOP. Try again.");
   revalidateSops();
   return { ok: true, data: { id: data.id } };
@@ -65,6 +88,7 @@ export async function updateSop(id: string, formData: FormData): Promise<ActionR
 
   const supabase = await createClient();
   const { error, count } = await supabase.from("sops").update(parsed.data, { count: "exact" }).eq("id", id);
+  if (error?.code === "23503") return fail("That category was just removed. Pick another.", { category_id: "Pick another category." });
   if (error || !count) return fail("Couldn't save the SOP. Try again.");
 
   if (formData.get("reset_reads") === "on") {
